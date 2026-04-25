@@ -1,33 +1,48 @@
 import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
 import './App.css'
+import DotGrid from '@/components/DotGrid'
+import RotatingText from './components/RotatingText'
 
 function App() {
   const [count, setCount] = useState(0)
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+      {/* Background Layer */}
+      <div className="fixed inset-0 -z-10 bg-[#120F17]">
+        <DotGrid 
+          baseColor="#2F293A" 
+          activeColor="#5227FF" 
+          dotSize={3} 
+        />
+      </div>
+
+      <section id="center" className="flex flex-col items-center justify-center min-h-[80vh]">
+        <div className="hero mb-8">
+          {/* Main Hero Typography */}
+          <div className="flex flex-row items-center justify-center flex-wrap gap-x-4 gap-y-2 text-5xl sm:text-6xl md:text-8xl font-bold tracking-tighter text-white">
+            <span className="select-none">Precise</span>
+            
+            <RotatingText
+              texts={['Extraction', 'Parsing', 'Layouts', 'Logic']}
+              mainClassName="px-4 sm:px-5 md:px-7 bg-[#5227FF] text-white overflow-hidden py-1 sm:py-2 md:py-3 justify-center rounded-2xl md:rounded-3xl"
+              staggerFrom="last"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-120%" }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden pb-1 sm:pb-2 md:pb-4"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={2500}
+              animatePresenceMode="popLayout" // Critical for smooth container resizing
+            />
+          </div>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+
+        <div className="text-center space-y-6">
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
       </section>
 
       <div className="ticks"></div>
@@ -59,54 +74,22 @@ function App() {
             <use href="/icons.svg#social-icon"></use>
           </svg>
           <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
+          <p>Join the community</p>
           <ul>
             <li>
               <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
+                <svg className="button-icon" role="presentation" aria-hidden="true">
                   <use href="/icons.svg#github-icon"></use>
                 </svg>
                 GitHub
               </a>
             </li>
             <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
               <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
+                <svg className="button-icon" role="presentation" aria-hidden="true">
                   <use href="/icons.svg#x-icon"></use>
                 </svg>
                 X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
               </a>
             </li>
           </ul>

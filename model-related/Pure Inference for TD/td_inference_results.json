@@ -1,0 +1,27 @@
+{
+  "model": "microsoft/table-transformer-detection",
+  "task": "Table Detection (TD)",
+  "confidence_threshold": 0.5,
+  "num_images": 1500,
+  "metrics_iou_50": {
+    "precision": 0.998876404494382,
+    "recall": 0.9927414852037968,
+    "f1_score": 0.9957994959395127,
+    "avg_iou": 0.9797766507927895,
+    "total_tp": 1778,
+    "total_fp": 2,
+    "total_fn": 13,
+    "total_gt": 1791
+  },
+  "metrics_iou_75": {
+    "precision": 0.998314606741573,
+    "recall": 0.9921831379117811,
+    "f1_score": 0.9952394287314478,
+    "avg_iou": 0.9800136365769011,
+    "total_tp": 1777,
+    "total_fp": 3,
+    "total_fn": 14,
+    "total_gt": 1791
+  },
+  "mAP_50_95": 0.9725042817081663
+}

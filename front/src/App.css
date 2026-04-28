@@ -19,41 +19,6 @@
 
 .hero {
   position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
 }
 
 #center {
@@ -182,3 +147,77 @@
     border-right-color: var(--border);
   }
 }
+
+/* Star Button Animation */
+/* Star Button Animation */
+.btn-extract {
+  position: relative;
+  transition: all 0.3s ease-in-out;
+  overflow: visible;
+  z-index: 10; 
+}
+
+/* Update your existing .btn-extract:hover block */
+.btn-extract:hover {
+  background: #120F17 !important; /* Changed from transparent to match page background */
+  color: var(--color-primary) !important;
+  box-shadow: 0 0 25px var(--color-primary);
+}
+
+.btn-extract .star-svg path {
+  fill: #ffffff;
+}
+
+/* Base positions (hidden behind button and made transparent) */
+.btn-extract .star-1 { position: absolute; top: 20%; left: 20%; width: 25px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 1s cubic-bezier(0.05, 0.83, 0.43, 0.96); }
+.btn-extract .star-2 { position: absolute; top: 45%; left: 45%; width: 15px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 1s cubic-bezier(0, 0.4, 0, 1.01); }
+.btn-extract .star-3 { position: absolute; top: 40%; left: 40%; width: 5px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 1s cubic-bezier(0, 0.4, 0, 1.01); }
+.btn-extract .star-4 { position: absolute; top: 20%; left: 40%; width: 8px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 0.8s cubic-bezier(0, 0.4, 0, 1.01); }
+.btn-extract .star-5 { position: absolute; top: 25%; left: 45%; width: 15px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 0.6s cubic-bezier(0, 0.4, 0, 1.01); }
+.btn-extract .star-6 { position: absolute; top: 5%; left: 50%; width: 5px; height: auto; filter: drop-shadow(0 0 0 #ffffff); z-index: -5; opacity: 0; transition: all 0.8s ease; }
+
+/* Hover positions (burst outward and fade in) */
+.btn-extract:hover .star-1 { top: -80%; left: -30%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+.btn-extract:hover .star-2 { top: -25%; left: 10%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+.btn-extract:hover .star-3 { top: 55%; left: 25%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+.btn-extract:hover .star-4 { top: 30%; left: 80%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+.btn-extract:hover .star-5 { top: 25%; left: 115%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+.btn-extract:hover .star-6 { top: 5%; left: 60%; filter: drop-shadow(0 0 10px #ffffff); z-index: 2; opacity: 1; }
+
+/* Add this anywhere in App.css */
+/* Custom Typography Definitions */
+.font-playwrite {
+  font-family: "Changa One", cursive;
+  font-style: normal;
+}
+.lato-regular {
+  font-family: "Lato", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+/* Full-Screen Slide Setup */
+.snap-container {
+  height: 100vh;
+  width: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  /* Hide scrollbar for a seamless single-slide experience */
+  scrollbar-width: none; 
+  -ms-overflow-style: none;
+}
+
+.snap-container::-webkit-scrollbar {
+  display: none;
+}
+
+.snap-slide {
+  height: 100vh;
+  width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Note: If you actually meant to use Poppins for the rotating text instead, 
+   you would use: font-family: "Poppins", sans-serif; */

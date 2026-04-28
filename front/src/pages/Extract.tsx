@@ -4,6 +4,8 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import JSZip from "jszip";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import ExtractPaginationBtns from "@/components/extract-pagination-btns";
+import ExtractTabs from "@/components/extract-tabs";
+import ExtractConfigRadioBtns from "@/components/extract-config-radio-btns";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -56,6 +58,9 @@ const getColor = (confidence: number) => {
 };
 
 export default function ExtractPage() {
+  const [activeTab, setActiveTab] = useState(0);
+  const [extractionMode, setExtractionMode] = useState<"fast" | "advanced">("fast");
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -161,6 +166,7 @@ export default function ExtractPage() {
           clearInterval(interval);
           setIsProcessing(false);
           setHasProcessed(true);
+          setActiveTab(1); // Auto-switch to Results tab
           return 100;
         }
         return prev + 10;
@@ -533,145 +539,153 @@ export default function ExtractPage() {
         </section>
 
         {/* Right Panel (Results/Editor) */}
-        <section className="flex-[1.5] flex flex-col bg-card relative">
-          <div className="p-4 border-b border-border bg-muted/5 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground tracking-wider">
-              Results
-            </h2>
-            {hasProcessed}
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto scroll-smooth">
-            {!isProcessing && !hasProcessed ? (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border rounded-xl bg-muted/5">
-                <IconTextRecognition className="size-12 mb-4 opacity-20" />
-                <p className="font-medium">No Data Extracted Yet</p>
-                <p className="text-sm mt-1 opacity-70">
-                  Upload a document and click "Run" to begin.
-                </p>
+        <section className="flex-[1.5] flex flex-col bg-card relative overflow-hidden">
+          <ExtractTabs
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            configContent={
+              <div className="h-full flex flex-col">
+                <ExtractConfigRadioBtns 
+                  mode={extractionMode} 
+                  onChange={setExtractionMode} 
+                />
               </div>
-            ) : isProcessing ? (
-              <div className="space-y-8 max-w-4xl mx-auto w-full">
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm font-medium">
-                    <span className="text-foreground animate-pulse">
-                      Analyzing Document Structure...
-                    </span>
-                    <span className="text-primary font-mono">{progress}%</span>
+            }
+            resultsContent={
+              <>
+                {!isProcessing && !hasProcessed ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border rounded-xl bg-muted/5 min-h-[400px]">
+                    <IconTextRecognition className="size-12 mb-4 opacity-20" />
+                    <p className="font-medium">No Data Extracted Yet</p>
+                    <p className="text-sm mt-1 opacity-70">
+                      Upload a document and click "Run" to begin.
+                    </p>
                   </div>
-                  <div className="h-2 w-full bg-muted overflow-hidden rounded-full border border-border/50">
-                    <div
-                      className="h-full bg-primary transition-all duration-300 ease-out"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="border border-border rounded-xl bg-background/50 p-6 space-y-6">
-                  <div className="flex items-center gap-4">
-                    <Skeleton className="h-10 w-32" />
-                    <Skeleton className="h-10 w-24" />
-                  </div>
-                  <div className="space-y-3">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6 max-w-full pb-10">
-                {Object.entries(groupedData).map(([regionId, rows]) => {
-                  const isSelected = selectedRegion === regionId;
-                  const isHovered = hoveredRegion === regionId;
-                  
-                  return (
-                    <div 
-                      key={regionId} 
-                      id={`region-panel-${regionId}`}
-                      className={cn(
-                        "border rounded-xl bg-background overflow-hidden transition-all duration-300 scroll-mt-6",
-                        isSelected ? "border-primary ring-1 ring-primary shadow-md" : 
-                        isHovered ? "border-primary/50 shadow-sm" : "border-border shadow-sm"
-                      )}
-                      onMouseEnter={() => setHoveredRegion(regionId)}
-                      onMouseLeave={() => setHoveredRegion(null)}
-                      onClick={() => setSelectedRegion(regionId)}
-                    >
-                      <div className={cn(
-                        "px-4 py-3 border-b flex justify-between items-center transition-colors cursor-pointer", 
-                        isSelected ? "bg-primary/10 border-primary/20" : 
-                        isHovered ? "bg-muted/50 border-border" : "bg-muted/30 border-border"
-                      )}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-medium tracking-wider">
-                            {regionId.replace('-', '_')}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {rows.length} rows detected
+                ) : isProcessing ? (
+                  <div className="space-y-8 max-w-4xl mx-auto w-full pt-10">
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm font-medium">
+                        <span className="text-foreground animate-pulse">
+                          Analyzing Document Structure ({extractionMode} mode)...
                         </span>
+                        <span className="text-primary font-mono">{progress}%</span>
                       </div>
-                      <div className="p-0 overflow-auto">
-                        <Table>
-                          <TableHeader className={cn(isSelected ? "bg-primary/5" : "bg-muted/20")}>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="w-[100px] border-r border-border font-mono text-xs">ID</TableHead>
-                              <TableHead className="border-r border-border font-mono text-xs">Name</TableHead>
-                              <TableHead className="border-r border-border font-mono text-xs">Amount</TableHead>
-                              <TableHead className="font-mono text-xs">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {rows.map((row) => (
-                              <TableRow key={row.id} className="group">
-                                <TableCell className="p-0 border-r border-border">
-                                  <input
-                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                    value={row.id}
-                                    onChange={(e) => {
-                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, id: e.target.value } : r));
-                                    }}
-                                  />
-                                </TableCell>
-                                <TableCell className="p-0 border-r border-border">
-                                  <input
-                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                    value={row.name}
-                                    onChange={(e) => {
-                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, name: e.target.value } : r));
-                                    }}
-                                  />
-                                </TableCell>
-                                <TableCell className="p-0 border-r border-border">
-                                  <input
-                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                    value={row.amount}
-                                    onChange={(e) => {
-                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, amount: e.target.value } : r));
-                                    }}
-                                  />
-                                </TableCell>
-                                <TableCell className="p-0">
-                                  <input
-                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                    value={row.status}
-                                    onChange={(e) => {
-                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, status: e.target.value } : r));
-                                    }}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                      <div className="h-2 w-full bg-muted overflow-hidden rounded-full border border-border/50">
+                        <div
+                          className="h-full bg-primary transition-all duration-300 ease-out"
+                          style={{ width: `${progress}%` }}
+                        />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+
+                    <div className="border border-border rounded-xl bg-background/50 p-6 space-y-6">
+                      <div className="flex items-center gap-4">
+                        <Skeleton className="h-10 w-32" />
+                        <Skeleton className="h-10 w-24" />
+                      </div>
+                      <div className="space-y-3">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6 max-w-full pb-10">
+                    {Object.entries(groupedData).map(([regionId, rows]) => {
+                      const isSelected = selectedRegion === regionId;
+                      const isHovered = hoveredRegion === regionId;
+                      
+                      return (
+                        <div 
+                          key={regionId} 
+                          id={`region-panel-${regionId}`}
+                          className={cn(
+                            "border rounded-xl bg-background overflow-hidden transition-all duration-300 scroll-mt-6",
+                            isSelected ? "border-primary ring-1 ring-primary shadow-md" : 
+                            isHovered ? "border-primary/50 shadow-sm" : "border-border shadow-sm"
+                          )}
+                          onMouseEnter={() => setHoveredRegion(regionId)}
+                          onMouseLeave={() => setHoveredRegion(null)}
+                          onClick={() => setSelectedRegion(regionId)}
+                        >
+                          <div className={cn(
+                            "px-4 py-3 border-b flex justify-between items-center transition-colors cursor-pointer", 
+                            isSelected ? "bg-primary/10 border-primary/20" : 
+                            isHovered ? "bg-muted/50 border-border" : "bg-muted/30 border-border"
+                          )}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-medium tracking-wider">
+                                {regionId.replace('-', '_')}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {rows.length} rows detected
+                            </span>
+                          </div>
+                          <div className="p-0 overflow-auto">
+                            <Table>
+                              <TableHeader className={cn(isSelected ? "bg-primary/5" : "bg-muted/20")}>
+                                <TableRow className="hover:bg-transparent">
+                                  <TableHead className="w-[100px] border-r border-border font-mono text-xs">ID</TableHead>
+                                  <TableHead className="border-r border-border font-mono text-xs">Name</TableHead>
+                                  <TableHead className="border-r border-border font-mono text-xs">Amount</TableHead>
+                                  <TableHead className="font-mono text-xs">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {rows.map((row) => (
+                                  <TableRow key={row.id} className="group">
+                                    <TableCell className="p-0 border-r border-border">
+                                      <input
+                                        className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                        value={row.id}
+                                        onChange={(e) => {
+                                          setTableData(prev => prev.map(r => r.id === row.id ? { ...r, id: e.target.value } : r));
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="p-0 border-r border-border">
+                                      <input
+                                        className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                        value={row.name}
+                                        onChange={(e) => {
+                                          setTableData(prev => prev.map(r => r.id === row.id ? { ...r, name: e.target.value } : r));
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="p-0 border-r border-border">
+                                      <input
+                                        className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                        value={row.amount}
+                                        onChange={(e) => {
+                                          setTableData(prev => prev.map(r => r.id === row.id ? { ...r, amount: e.target.value } : r));
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="p-0">
+                                      <input
+                                        className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                        value={row.status}
+                                        onChange={(e) => {
+                                          setTableData(prev => prev.map(r => r.id === row.id ? { ...r, status: e.target.value } : r));
+                                        }}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            }
+          />
         </section>
       </main>
 

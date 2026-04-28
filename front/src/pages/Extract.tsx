@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import JSZip from "jszip";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import ExtractPaginationBtns from "@/components/extract-pagination-btns";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -21,9 +22,8 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { FileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconX } from '@tabler/icons-react';
+import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconXFilled, IconFileTypePdf } from '@tabler/icons-react';
 
 export interface Detection {
   id: string;
@@ -34,11 +34,12 @@ export interface Detection {
   label: string;
   confidence: number;
   type: 'table' | 'cell' | 'header';
+  page?: number;
 }
 
 const mockDetections: Detection[] = [
-  { id: "region-1", x: 0.05, y: 0.15, width: 0.9, height: 0.35, label: "Table", confidence: 0.96, type: 'table' },
-  { id: "region-2", x: 0.05, y: 0.55, width: 0.9, height: 0.40, label: "Table", confidence: 0.82, type: 'table' },
+  { id: "region-1", x: 0.05, y: 0.15, width: 0.9, height: 0.35, label: "Table", confidence: 0.96, type: 'table', page: 1 },
+  { id: "region-2", x: 0.05, y: 0.55, width: 0.9, height: 0.40, label: "Table", confidence: 0.82, type: 'table', page: 2 },
 ];
 
 const initialTableData = [
@@ -59,6 +60,12 @@ export default function ExtractPage() {
   const [hasProcessed, setHasProcessed] = useState(false);
   const [progress, setProgress] = useState(0);
   const [tableData, setTableData] = useState(initialTableData);
+  
+  // PDF Rasterization states
+  const [pdfPages, setPdfPages] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isRasterizing, setIsRasterizing] = useState(false);
   
   // Overlay specific states
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
@@ -84,6 +91,61 @@ export default function ExtractPage() {
     accept: "image/*,application/pdf",
     maxSize: 5 * 1024 * 1024, // 5MB
   });
+
+  useEffect(() => {
+    const processFile = async () => {
+      if (!files.length || !files[0]?.file) {
+        setPdfPages([]);
+        setTotalPages(1);
+        setCurrentPage(1);
+        return;
+      }
+      const fileObj = files[0].file;
+      if (fileObj instanceof File && fileObj.type === "application/pdf") {
+        setIsRasterizing(true);
+        try {
+          const arrayBuffer = await fileObj.arrayBuffer();
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+          
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdf = await loadingTask.promise;
+          const numPages = pdf.numPages;
+          setTotalPages(numPages);
+          
+          const pages: string[] = [];
+          for (let i = 1; i <= numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) continue;
+            
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            const renderContext: any = {
+              canvasContext: context,
+              viewport: viewport,
+            };
+            await page.render(renderContext).promise;
+            pages.push(canvas.toDataURL('image/jpeg', 0.9));
+          }
+          setPdfPages(pages);
+          setCurrentPage(1);
+        } catch (error) {
+          console.error("Error rasterizing PDF:", error);
+        } finally {
+          setIsRasterizing(false);
+        }
+      } else {
+        setPdfPages(files[0].preview ? [files[0].preview] : []);
+        setTotalPages(1);
+        setCurrentPage(1);
+      }
+    };
+    processFile();
+  }, [files]);
 
   const handleProcess = () => {
     if (files.length === 0) return;
@@ -119,16 +181,28 @@ export default function ExtractPage() {
   };
 
   const previewUrl = files[0]?.preview || null;
-  const isPdf = files[0]?.file?.type === "application/pdf";
+  const displayUrl = pdfPages.length > 0 ? pdfPages[currentPage - 1] : previewUrl;
+
+  // Filter detections and table data for current page
+  const currentPageDetections = useMemo(() => {
+    return mockDetections.filter(det => !det.page || det.page === currentPage);
+  }, [currentPage]);
+  
+  const currentPageRegionIds = useMemo(() => {
+    return new Set(currentPageDetections.map(det => det.id));
+  }, [currentPageDetections]);
 
   const groupedData = useMemo(() => {
     const groups: Record<string, typeof tableData> = {};
     tableData.forEach(row => {
-      if (!groups[row.regionId]) groups[row.regionId] = [];
-      groups[row.regionId].push(row);
+      // Only include rows for regions on the current page
+      if (currentPageRegionIds.has(row.regionId)) {
+        if (!groups[row.regionId]) groups[row.regionId] = [];
+        groups[row.regionId].push(row);
+      }
     });
     return groups;
-  }, [tableData]);
+  }, [tableData, currentPageRegionIds]);
 
   const handleExportCSV = async () => {
     if (!hasProcessed || files.length === 0) return;
@@ -222,14 +296,14 @@ export default function ExtractPage() {
               <div className="flex items-center gap-2">
                 <IconZoomIn className="size-5 text-primary" />
                 <h3 className="font-medium text-sm">
-                  Region Inspector: <span className="font-mono text-primary">{zoomedRegion.id.toUpperCase().replace('-', '_')}</span>
+                  Region Inspector: <span className="font-mono text-primary">{zoomedRegion.id.replace('-', '_')}</span>
                 </h3>
               </div>
               <button 
                 onClick={() => setZoomedRegion(null)}
                 className="p-1 rounded-md hover:bg-muted/50 transition-colors"
               >
-                <IconX className="size-5 text-muted-foreground hover:text-foreground" />
+                <IconXFilled className="size-5 text-muted-foreground hover:text-foreground" />
               </button>
             </div>
             <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYNgfQEhD/oMBExMTE1QNSBAMjP9Ea8BqMFEGjBownINoWDAajWbQ0wAABrQxAwj6190AAAAASUVORK5CYII=')]">
@@ -280,10 +354,19 @@ export default function ExtractPage() {
       <main className="flex-1 min-h-0 flex flex-col lg:flex-row">
         {/* Left Panel (Input/Viewer) */}
         <section className="flex-1 lg:max-w-[40%] xl:max-w-[35%] border-r border-border flex flex-col bg-muted/5">
-          <div className="p-4 border-b border-border">
-            <h2 className="text-sm font-medium text-muted-foreground tracking-wider">
+          <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+            <h2 className="text-sm font-medium text-muted-foreground tracking-wider shrink-0">
               Document Viewer
             </h2>
+            {files.length > 0 && totalPages > 0 && (
+              <div className="scale-90 origin-right">
+                <ExtractPaginationBtns 
+                  currentPage={currentPage} 
+                  totalPages={totalPages} 
+                  onPageChange={setCurrentPage} 
+                />
+              </div>
+            )}
           </div>
           <div className="p-6 flex-1 overflow-y-auto flex flex-col">
             <div className="flex flex-col gap-2 flex-1">
@@ -316,27 +399,25 @@ export default function ExtractPage() {
 
                   {files.length > 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/20 rounded-xl overflow-hidden p-2">
-                      {isPdf ? (
+                      {isRasterizing ? (
                         <div className="flex flex-col items-center justify-center text-center p-6">
-                          <FileIcon className="size-16 opacity-50 mb-4 text-primary" />
+                          <IconFileTypePdf className="size-16 opacity-50 mb-4 text-primary animate-pulse" />
                           <p className="font-medium truncate max-w-[250px]">
-                            {files[0].file instanceof File
-                              ? files[0].file.name
-                              : files[0].file.name}
+                            Processing PDF...
                           </p>
                           <p className="text-xs text-muted-foreground mt-2">
-                            PDF Document Selected
+                            Please wait
                           </p>
                         </div>
-                      ) : previewUrl ? (
+                      ) : displayUrl ? (
                         <div 
-                          className="relative w-full h-full shadow-sm bg-background/50 border border-border/50 rounded overflow-y-auto overflow-x-hidden"
+                          className="relative w-full h-full shadow-sm bg-background/50 border border-border/50 rounded overflow-y-auto overflow-x-hidden flex flex-col"
                         >
-                          <div className="relative w-full h-auto">
+                          <div className="relative w-full h-auto flex-1">
                             <img
-                              alt="Uploaded document"
+                              alt={`Document page ${currentPage}`}
                               className="w-full h-auto pointer-events-none select-none block"
-                              src={previewUrl}
+                              src={displayUrl}
                               onLoad={(e) => {
                                 setImageSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight });
                               }}
@@ -346,7 +427,7 @@ export default function ExtractPage() {
                                 className="absolute inset-0 w-full h-full z-10"
                                 onClick={() => setSelectedRegion(null)}
                               >
-                              {mockDetections.map(det => {
+                              {currentPageDetections.map(det => {
                                 const colors = getColor(det.confidence);
                                 const isHovered = hoveredRegion === det.id;
                                 const isSelected = selectedRegion === det.id;
@@ -524,7 +605,7 @@ export default function ExtractPage() {
                       )}>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-medium tracking-wider">
-                            {regionId.toUpperCase().replace('-', '_')}
+                            {regionId.replace('-', '_')}
                           </span>
                         </div>
                         <span className="text-xs text-muted-foreground">

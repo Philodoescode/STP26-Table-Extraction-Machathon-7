@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import UploadComponent from "@/components/comp-544";
-import TabsComponent from "@/components/comp-433";
+import TabsComponent from "@/components/extract-tabs";
 import StatusBadge from "@/components/comp-420";
 
 export default function ExtractPage() {

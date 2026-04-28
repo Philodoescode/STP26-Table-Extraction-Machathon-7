@@ -330,28 +330,22 @@ export default function ExtractPage() {
                         </div>
                       ) : previewUrl ? (
                         <div 
-                          className="relative flex items-center justify-center shadow-sm bg-background/50 border border-border/50 rounded overflow-hidden"
-                          style={{ 
-                            width: imageSize.width ? '100%' : 'auto', 
-                            height: imageSize.height ? '100%' : 'auto',
-                            aspectRatio: imageSize.width && imageSize.height ? `${imageSize.width}/${imageSize.height}` : undefined,
-                            maxHeight: '100%',
-                            maxWidth: '100%'
-                          }}
+                          className="relative w-full h-full shadow-sm bg-background/50 border border-border/50 rounded overflow-y-auto overflow-x-hidden"
                         >
-                          <img
-                            alt="Uploaded document"
-                            className="w-full h-full object-contain pointer-events-none select-none"
-                            src={previewUrl}
-                            onLoad={(e) => {
-                              setImageSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight });
-                            }}
-                          />
-                          {hasProcessed && imageSize.width > 0 && (
-                            <svg 
-                              className="absolute inset-0 w-full h-full z-10"
-                              onClick={() => setSelectedRegion(null)}
-                            >
+                          <div className="relative w-full h-auto">
+                            <img
+                              alt="Uploaded document"
+                              className="w-full h-auto pointer-events-none select-none block"
+                              src={previewUrl}
+                              onLoad={(e) => {
+                                setImageSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight });
+                              }}
+                            />
+                            {hasProcessed && imageSize.width > 0 && (
+                              <svg 
+                                className="absolute inset-0 w-full h-full z-10"
+                                onClick={() => setSelectedRegion(null)}
+                              >
                               {mockDetections.map(det => {
                                 const colors = getColor(det.confidence);
                                 const isHovered = hoveredRegion === det.id;
@@ -401,7 +395,8 @@ export default function ExtractPage() {
                                 )
                               })}
                             </svg>
-                          )}
+                            )}
+                          </div>
                         </div>
                       ) : null}
                     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import {
   Breadcrumb,
@@ -22,23 +22,51 @@ import {
 } from "@/components/ui/table";
 import { FileIcon, CheckCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { IconTextRecognition } from '@tabler/icons-react';
-import { IconLetterXSmall } from '@tabler/icons-react';
-import { IconFileUploadFilled  } from '@tabler/icons-react';
+import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconX } from '@tabler/icons-react';
 
-// Mock data
-const mockData = [
-  { id: "1", name: "John Doe", amount: "1200.00", status: "Paid" },
-  { id: "2", name: "Jane Smith", amount: "850.50", status: "Pending" },
-  { id: "3", name: "Bob Johnson", amount: "2100.00", status: "Paid" },
-  { id: "4", name: "Alice Williams", amount: "450.00", status: "Overdue" },
+export interface Detection {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  confidence: number;
+  type: 'table' | 'cell' | 'header';
+}
+
+const mockDetections: Detection[] = [
+  { id: "region-1", x: 0.05, y: 0.15, width: 0.9, height: 0.35, label: "Table", confidence: 0.96, type: 'table' },
+  { id: "region-2", x: 0.05, y: 0.55, width: 0.9, height: 0.40, label: "Table", confidence: 0.82, type: 'table' },
 ];
+
+const initialTableData = [
+  { id: "1", name: "John Doe", amount: "1200.00", status: "Paid", regionId: "region-1" },
+  { id: "2", name: "Jane Smith", amount: "850.50", status: "Pending", regionId: "region-1" },
+  { id: "3", name: "Bob Johnson", amount: "2100.00", status: "Paid", regionId: "region-2" },
+  { id: "4", name: "Alice Williams", amount: "450.00", status: "Overdue", regionId: "region-2" },
+];
+
+const getColor = (confidence: number) => {
+  if (confidence > 0.9) return { stroke: '#22c55e', fill: 'rgba(34, 197, 94, 0.1)', hoverFill: 'rgba(34, 197, 94, 0.25)' };
+  if (confidence >= 0.7) return { stroke: '#f97316', fill: 'rgba(249, 115, 22, 0.1)', hoverFill: 'rgba(249, 115, 22, 0.25)' };
+  return { stroke: '#ef4444', fill: 'rgba(239, 68, 68, 0.1)', hoverFill: 'rgba(239, 68, 68, 0.25)' };
+};
 
 export default function ExtractPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [tableData, setTableData] = useState(mockData);
+  const [tableData, setTableData] = useState(initialTableData);
+  
+  // Overlay specific states
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  
+  // Modal state
+  const [zoomedRegion, setZoomedRegion] = useState<Detection | null>(null);
+  const modalCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [
     { files, isDragging, errors },
@@ -62,6 +90,7 @@ export default function ExtractPage() {
     setIsProcessing(true);
     setHasProcessed(false);
     setProgress(0);
+    setSelectedRegion(null);
 
     const interval = setInterval(() => {
       setProgress((prev) => {
@@ -76,11 +105,108 @@ export default function ExtractPage() {
     }, 300);
   };
 
+  const handleDetectionClick = (id: string) => {
+    setSelectedRegion(id);
+    const element = document.getElementById(`region-panel-${id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleDetectionDoubleClick = (det: Detection) => {
+    setZoomedRegion(det);
+  };
+
   const previewUrl = files[0]?.preview || null;
   const isPdf = files[0]?.file?.type === "application/pdf";
 
+  const groupedData = useMemo(() => {
+    const groups: Record<string, typeof tableData> = {};
+    tableData.forEach(row => {
+      if (!groups[row.regionId]) groups[row.regionId] = [];
+      groups[row.regionId].push(row);
+    });
+    return groups;
+  }, [tableData]);
+
+  // Effect to draw cropped image on canvas when modal opens
+  useEffect(() => {
+    if (zoomedRegion && previewUrl && modalCanvasRef.current) {
+      const img = new Image();
+      img.src = previewUrl;
+      img.onload = () => {
+        const canvas = modalCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Calculate source rectangle
+        const sx = zoomedRegion.x * img.naturalWidth;
+        const sy = zoomedRegion.y * img.naturalHeight;
+        const sWidth = zoomedRegion.width * img.naturalWidth;
+        const sHeight = zoomedRegion.height * img.naturalHeight;
+
+        // Set canvas size to match the cropped region's aspect ratio
+        // Max width is 800px or window width - 100
+        const maxWidth = Math.min(800, window.innerWidth - 100);
+        const scale = maxWidth / sWidth;
+        
+        canvas.width = sWidth * scale;
+        canvas.height = sHeight * scale;
+
+        // Clear and draw
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Disable smoothing for crisp text when scaled
+        ctx.imageSmoothingEnabled = false;
+        
+        ctx.drawImage(
+          img,
+          sx, sy, sWidth, sHeight, // Source coordinates
+          0, 0, canvas.width, canvas.height // Destination coordinates
+        );
+      };
+    }
+  }, [zoomedRegion, previewUrl]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
+      {/* Zoom Modal */}
+      {zoomedRegion && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setZoomedRegion(null)}
+        >
+          <div 
+            className="relative bg-background border border-border rounded-xl shadow-2xl flex flex-col max-h-[90vh] max-w-[95vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <IconZoomIn className="size-5 text-primary" />
+                <h3 className="font-medium text-sm">
+                  Region Inspector: <span className="font-mono text-primary">{zoomedRegion.id.toUpperCase().replace('-', '_')}</span>
+                </h3>
+              </div>
+              <button 
+                onClick={() => setZoomedRegion(null)}
+                className="p-1 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <IconX className="size-5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYNgfQEhD/oMBExMTE1QNSBAMjP9Ea8BqMFEGjBownINoWDAajWbQ0wAABrQxAwj6190AAAAASUVORK5CYII=')]">
+              <canvas 
+                ref={modalCanvasRef} 
+                className="max-w-full max-h-full object-contain border border-border shadow-lg rounded"
+                style={{ cursor: 'zoom-out' }}
+                onClick={() => setZoomedRegion(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex-none h-16 border-b border-border flex items-center justify-between px-6 bg-card/30">
         <Breadcrumb>
@@ -123,15 +249,16 @@ export default function ExtractPage() {
           </div>
           <div className="p-6 flex-1 overflow-y-auto flex flex-col">
             <div className="flex flex-col gap-2 flex-1">
-              <div className="relative flex-1 min-h-[300px]">
+              <div className="relative flex-1 min-h-[300px] flex flex-col">
                 <div
                   className={cn(
-                    "relative flex h-full flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition-colors",
+                    "relative flex flex-1 w-full h-full flex-col items-center justify-center overflow-hidden rounded-xl transition-colors",
                     isDragging
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-accent/50",
-                    "has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50",
-                    files.length > 0 && "border-none bg-black/5"
+                      ? "border-primary bg-primary/5 border-2 border-dashed"
+                      : files.length === 0 
+                        ? "border-border hover:bg-accent/50 border-2 border-dashed"
+                        : "border-none bg-muted/20",
+                    "has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50"
                   )}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
@@ -150,7 +277,7 @@ export default function ExtractPage() {
                   )}
 
                   {files.length > 0 ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/20 rounded-xl overflow-hidden">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/20 rounded-xl overflow-hidden p-2">
                       {isPdf ? (
                         <div className="flex flex-col items-center justify-center text-center p-6">
                           <FileIcon className="size-16 opacity-50 mb-4 text-primary" />
@@ -164,15 +291,84 @@ export default function ExtractPage() {
                           </p>
                         </div>
                       ) : previewUrl ? (
-                        <img
-                          alt="Uploaded document"
-                          className="w-full h-full object-contain bg-black/10"
-                          src={previewUrl}
-                        />
+                        <div 
+                          className="relative flex items-center justify-center shadow-sm bg-background/50 border border-border/50 rounded overflow-hidden"
+                          style={{ 
+                            width: imageSize.width ? '100%' : 'auto', 
+                            height: imageSize.height ? '100%' : 'auto',
+                            aspectRatio: imageSize.width && imageSize.height ? `${imageSize.width}/${imageSize.height}` : undefined,
+                            maxHeight: '100%',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          <img
+                            alt="Uploaded document"
+                            className="w-full h-full object-contain pointer-events-none select-none"
+                            src={previewUrl}
+                            onLoad={(e) => {
+                              setImageSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight });
+                            }}
+                          />
+                          {hasProcessed && imageSize.width > 0 && (
+                            <svg 
+                              className="absolute inset-0 w-full h-full z-10"
+                              onClick={() => setSelectedRegion(null)}
+                            >
+                              {mockDetections.map(det => {
+                                const colors = getColor(det.confidence);
+                                const isHovered = hoveredRegion === det.id;
+                                const isSelected = selectedRegion === det.id;
+                                
+                                return (
+                                  <g 
+                                    key={det.id} 
+                                    className="pointer-events-auto cursor-pointer transition-all"
+                                    onMouseEnter={() => setHoveredRegion(det.id)}
+                                    onMouseLeave={() => setHoveredRegion(null)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDetectionClick(det.id);
+                                    }}
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDetectionDoubleClick(det);
+                                    }}
+                                  >
+                                    <rect
+                                      x={`${det.x * 100}%`}
+                                      y={`${det.y * 100}%`}
+                                      width={`${det.width * 100}%`}
+                                      height={`${det.height * 100}%`}
+                                      fill={isHovered || isSelected ? colors.hoverFill : colors.fill}
+                                      stroke={colors.stroke}
+                                      strokeWidth={isHovered || isSelected ? 3 : 2}
+                                      rx={4}
+                                      className="transition-all duration-200"
+                                    />
+                                    <foreignObject
+                                      x={`${det.x * 100}%`}
+                                      y={`${det.y * 100}%`}
+                                      width="120"
+                                      height="24"
+                                      className="overflow-visible pointer-events-none"
+                                    >
+                                      <div 
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded-tl-[3px] rounded-br-[3px] text-[10px] font-mono font-bold text-white shadow-sm"
+                                        style={{ backgroundColor: colors.stroke }}
+                                      >
+                                        {det.label} {Math.round(det.confidence * 100)}%
+                                      </div>
+                                    </foreignObject>
+                                  </g>
+                                )
+                              })}
+                            </svg>
+                          )}
+                        </div>
                       ) : null}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center px-4 py-3 text-center pointer-events-none">
+                    <div className="flex flex-col items-center justify-center px-4 py-3 text-center pointer-events-none z-10">
                       <div className="mb-4 flex size-14 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
                         <IconFileUploadFilled className="size-6 text-muted-foreground opacity-70" />
                       </div>
@@ -187,7 +383,7 @@ export default function ExtractPage() {
                 </div>
 
                 {files.length > 0 && (
-                  <div className="absolute top-4 right-4 z-10 flex gap-2">
+                  <div className="absolute top-4 right-4 z-20 flex gap-2">
                     <button
                       aria-label="Change file"
                       className="flex h-8 px-3 text-xs font-medium items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border text-foreground hover:bg-background transition-colors"
@@ -234,7 +430,7 @@ export default function ExtractPage() {
               </span>
             )}
           </div>
-          <div className="p-6 flex-1 overflow-y-auto">
+          <div className="p-6 flex-1 overflow-y-auto scroll-smooth">
             {!isProcessing && !hasProcessed ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border rounded-xl bg-muted/5">
                 <IconTextRecognition className="size-12 mb-4 opacity-20" />
@@ -274,88 +470,96 @@ export default function ExtractPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-6 max-w-full">
-                <div className="border border-border rounded-xl bg-background overflow-hidden shadow-sm">
-                  <div className="bg-muted/30 px-4 py-3 border-b border-border flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <CheckCircleIcon className="size-4 text-green-500" />
-                      <span className="text-xs font-mono font-medium tracking-wider">
-                        TABLE_REGION_1
-                      </span>
+              <div className="space-y-6 max-w-full pb-10">
+                {Object.entries(groupedData).map(([regionId, rows]) => {
+                  const isSelected = selectedRegion === regionId;
+                  const isHovered = hoveredRegion === regionId;
+                  
+                  return (
+                    <div 
+                      key={regionId} 
+                      id={`region-panel-${regionId}`}
+                      className={cn(
+                        "border rounded-xl bg-background overflow-hidden transition-all duration-300 scroll-mt-6",
+                        isSelected ? "border-primary ring-1 ring-primary shadow-md" : 
+                        isHovered ? "border-primary/50 shadow-sm" : "border-border shadow-sm"
+                      )}
+                      onMouseEnter={() => setHoveredRegion(regionId)}
+                      onMouseLeave={() => setHoveredRegion(null)}
+                      onClick={() => setSelectedRegion(regionId)}
+                    >
+                      <div className={cn(
+                        "px-4 py-3 border-b flex justify-between items-center transition-colors cursor-pointer", 
+                        isSelected ? "bg-primary/10 border-primary/20" : 
+                        isHovered ? "bg-muted/50 border-border" : "bg-muted/30 border-border"
+                      )}>
+                        <div className="flex items-center gap-2">
+                          <CheckCircleIcon className={cn("size-4", isSelected ? "text-primary" : "text-green-500")} />
+                          <span className="text-xs font-mono font-medium tracking-wider">
+                            {regionId.toUpperCase().replace('-', '_')}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {rows.length} rows detected
+                        </span>
+                      </div>
+                      <div className="p-0 overflow-auto">
+                        <Table>
+                          <TableHeader className={cn(isSelected ? "bg-primary/5" : "bg-muted/20")}>
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="w-[100px] border-r border-border font-mono text-xs">ID</TableHead>
+                              <TableHead className="border-r border-border font-mono text-xs">Name</TableHead>
+                              <TableHead className="border-r border-border font-mono text-xs">Amount</TableHead>
+                              <TableHead className="font-mono text-xs">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {rows.map((row) => (
+                              <TableRow key={row.id} className="group">
+                                <TableCell className="p-0 border-r border-border">
+                                  <input
+                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                    value={row.id}
+                                    onChange={(e) => {
+                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, id: e.target.value } : r));
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="p-0 border-r border-border">
+                                  <input
+                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                    value={row.name}
+                                    onChange={(e) => {
+                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, name: e.target.value } : r));
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="p-0 border-r border-border">
+                                  <input
+                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                    value={row.amount}
+                                    onChange={(e) => {
+                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, amount: e.target.value } : r));
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="p-0">
+                                  <input
+                                    className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                                    value={row.status}
+                                    onChange={(e) => {
+                                      setTableData(prev => prev.map(r => r.id === row.id ? { ...r, status: e.target.value } : r));
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      4 rows detected
-                    </span>
-                  </div>
-                  <div className="p-0 overflow-auto">
-                    <Table>
-                      <TableHeader className="bg-muted/20">
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="w-[100px] border-r border-border font-mono text-xs">
-                            ID
-                          </TableHead>
-                          <TableHead className="border-r border-border font-mono text-xs">
-                            Name
-                          </TableHead>
-                          <TableHead className="border-r border-border font-mono text-xs">
-                            Amount
-                          </TableHead>
-                          <TableHead className="font-mono text-xs">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tableData.map((row, rowIndex) => (
-                          <TableRow key={rowIndex} className="group">
-                            <TableCell className="p-0 border-r border-border">
-                              <input
-                                className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                value={row.id}
-                                onChange={(e) => {
-                                  const newData = [...tableData];
-                                  newData[rowIndex].id = e.target.value;
-                                  setTableData(newData);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="p-0 border-r border-border">
-                              <input
-                                className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                value={row.name}
-                                onChange={(e) => {
-                                  const newData = [...tableData];
-                                  newData[rowIndex].name = e.target.value;
-                                  setTableData(newData);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="p-0 border-r border-border">
-                              <input
-                                className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                value={row.amount}
-                                onChange={(e) => {
-                                  const newData = [...tableData];
-                                  newData[rowIndex].amount = e.target.value;
-                                  setTableData(newData);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="p-0">
-                              <input
-                                className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
-                                value={row.status}
-                                onChange={(e) => {
-                                  const newData = [...tableData];
-                                  newData[rowIndex].status = e.target.value;
-                                  setTableData(newData);
-                                }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>

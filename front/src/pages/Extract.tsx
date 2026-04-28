@@ -462,11 +462,7 @@ export default function ExtractPage() {
             <h2 className="text-sm font-medium text-muted-foreground tracking-wider">
               Results
             </h2>
-            {hasProcessed && (
-              <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 rounded">
-                EDIT MODE
-              </span>
-            )}
+            {hasProcessed}
           </div>
           <div className="p-6 flex-1 overflow-y-auto scroll-smooth">
             {!isProcessing && !hasProcessed ? (

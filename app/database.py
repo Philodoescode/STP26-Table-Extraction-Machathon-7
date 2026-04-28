@@ -57,3 +57,41 @@ def init_db() -> None:
                 FOREIGN KEY (job_id) REFERENCES jobs(id)
             )
         """)
+
+        # ── User overrides for individual cells ──────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cell_overrides (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_id      TEXT    NOT NULL,
+                job_id        TEXT    NOT NULL,
+                row_index     INTEGER NOT NULL,
+                col_index     INTEGER NOT NULL,
+                original_text TEXT,
+                override_text TEXT    NOT NULL,
+                updated_at    TEXT    NOT NULL,
+                FOREIGN KEY (table_id) REFERENCES table_results(id),
+                FOREIGN KEY (job_id)   REFERENCES jobs(id),
+                UNIQUE(table_id, row_index, col_index)
+            )
+        """)
+
+        # ── Export tracking for idempotent CSV builds ────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS exports (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id       TEXT NOT NULL UNIQUE,
+                csv_path     TEXT NOT NULL,
+                data_hash    TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                download_url TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES jobs(id)
+            )
+        """)
+
+        # ── Performance indexes for metrics queries ──────────────────────
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_finished ON jobs(finished_at)"
+        )

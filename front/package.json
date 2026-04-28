@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "gsap": "^3.13.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.11.0",
     "motion": "^12.38.0",
     "radix-ui": "^1.4.3",

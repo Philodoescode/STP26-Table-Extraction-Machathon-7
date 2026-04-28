@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import JSZip from "jszip";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import {
   Breadcrumb,
@@ -20,7 +21,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { FileIcon, CheckCircleIcon } from "lucide-react";
+import { FileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconX } from '@tabler/icons-react';
 
@@ -129,6 +130,42 @@ export default function ExtractPage() {
     return groups;
   }, [tableData]);
 
+  const handleExportCSV = async () => {
+    if (!hasProcessed || files.length === 0) return;
+
+    const zip = new JSZip();
+    const uploadedFileName = files[0].file instanceof File ? files[0].file.name : files[0].file.name || "document";
+    const baseName = uploadedFileName.includes('.') ? uploadedFileName.substring(0, uploadedFileName.lastIndexOf('.')) : uploadedFileName;
+
+    let tableNo = 1;
+    for (const [, rows] of Object.entries(groupedData)) {
+      const header = "ID,Name,Amount,Status\n";
+      const csvRows = rows.map(row => {
+        const escapeCell = (val: string) => {
+          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+            return `"${val.replace(/"/g, '""')}"`;
+          }
+          return val;
+        };
+        return `${escapeCell(row.id)},${escapeCell(row.name)},${escapeCell(row.amount)},${escapeCell(row.status)}`;
+      });
+      const csvContent = header + csvRows.join("\n");
+      
+      zip.file(`${baseName}_table_${tableNo}.csv`, csvContent);
+      tableNo++;
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseName}_extracted_tables.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Effect to draw cropped image on canvas when modal opens
   useEffect(() => {
     if (zoomedRegion && previewUrl && modalCanvasRef.current) {
@@ -232,6 +269,7 @@ export default function ExtractPage() {
             disabled={!hasProcessed}
             variant="outline"
             className="border-border hover:bg-accent hover:text-accent-foreground"
+            onClick={handleExportCSV}
           >
             Export CSV
           </Button>
@@ -243,8 +281,8 @@ export default function ExtractPage() {
         {/* Left Panel (Input/Viewer) */}
         <section className="flex-1 lg:max-w-[40%] xl:max-w-[35%] border-r border-border flex flex-col bg-muted/5">
           <div className="p-4 border-b border-border">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Input / Viewer
+            <h2 className="text-sm font-medium text-muted-foreground tracking-wider">
+              Document Viewer
             </h2>
           </div>
           <div className="p-6 flex-1 overflow-y-auto flex flex-col">
@@ -421,7 +459,7 @@ export default function ExtractPage() {
         {/* Right Panel (Results/Editor) */}
         <section className="flex-[1.5] flex flex-col bg-card relative">
           <div className="p-4 border-b border-border bg-muted/5 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            <h2 className="text-sm font-medium text-muted-foreground tracking-wider">
               Results
             </h2>
             {hasProcessed && (
@@ -494,7 +532,6 @@ export default function ExtractPage() {
                         isHovered ? "bg-muted/50 border-border" : "bg-muted/30 border-border"
                       )}>
                         <div className="flex items-center gap-2">
-                          <CheckCircleIcon className={cn("size-4", isSelected ? "text-primary" : "text-green-500")} />
                           <span className="text-xs font-mono font-medium tracking-wider">
                             {regionId.toUpperCase().replace('-', '_')}
                           </span>

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import health, jobs, upload
+from app.routers import health, jobs, metrics, preview, upload
 
 
 @asynccontextmanager
@@ -38,3 +38,5 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(upload.router)
 app.include_router(jobs.router)
+app.include_router(preview.router)
+app.include_router(metrics.router)

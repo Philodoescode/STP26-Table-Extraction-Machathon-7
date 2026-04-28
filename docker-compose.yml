@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    image: table-extraction-api
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # Persisted job files (uploads, crops, CSVs, SQLite DB)
+      - ./storage:/app/storage
+
+      # TDATR model repository (read-only mount from host/WSL)
+      # Set HOST_TDATR_REPO_DIR in .env to the absolute path of /home/yousif/TDATR
+      - ${HOST_TDATR_REPO_DIR}:/tdatr_repo:ro
+
+      # TDATR model checkpoint (single .pt file, read-only)
+      # Set HOST_TDATR_CHECKPOINT in .env to the absolute path of the model.pt file
+      - ${HOST_TDATR_CHECKPOINT}:/models/model.pt:ro
+
+      # Surya layout model directory (read-only)
+      # Set HOST_SURYA_MODEL_DIR in .env to the absolute path of the checkpoint dir
+      - ${HOST_SURYA_MODEL_DIR}:/models/surya_layout:ro
+
+    environment:
+      # Storage (inside container)
+      - STORAGE_PATH=/app/storage
+      - DATABASE_PATH=/app/storage/jobs.db
+
+      # Model paths (inside container — mapped via volumes above)
+      - TDATR_REPO_DIR=/tdatr_repo
+      - TDATR_CHECKPOINT_PATH=/models/model.pt
+      - SURYA_LAYOUT_MODEL_DIR=/models/surya_layout
+
+      # Tuning knobs (override via .env if needed)
+      - TABLE_DETECTION_THRESHOLD=0.0
+      - TABLE_DETECTION_PADDING=5.0
+      - TDATR_MAX_LEN=4096
+      - TDATR_TEMPERATURE=0.5
+      - MAX_FILE_SIZE_MB=100
+
+      # CORS origins for the Vite frontend
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+
+    # GPU passthrough via nvidia-container-toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+    restart: unless-stopped

@@ -3,8 +3,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ExtractConfigRadioBtnsProps {
-  mode: "fast" | "advanced";
-  onChange: (mode: "fast" | "advanced") => void;
+  mode: "fast" | "accurate";
+  onChange: (mode: "fast" | "accurate") => void;
 }
 
 export default function ExtractConfigRadioBtns({ mode, onChange }: ExtractConfigRadioBtnsProps) {
@@ -26,7 +26,7 @@ export default function ExtractConfigRadioBtns({ mode, onChange }: ExtractConfig
           />
           <div className="grid grow gap-1.5">
             <Label htmlFor={`${id}-fast`} className="font-semibold text-base text-foreground cursor-pointer">
-              Fast Mode
+              Fast
             </Label>
             <p
               className="text-muted-foreground text-sm leading-relaxed"
@@ -39,18 +39,18 @@ export default function ExtractConfigRadioBtns({ mode, onChange }: ExtractConfig
         {/* Radio card #2 */}
         <div className="relative flex w-full items-start gap-3 rounded-xl border border-border bg-card p-5 shadow-sm outline-none has-data-[state=checked]:border-primary has-data-[state=checked]:ring-1 has-data-[state=checked]:ring-primary transition-all hover:border-primary/50 cursor-pointer">
           <RadioGroupItem
-            aria-describedby={`${id}-advanced-description`}
+            aria-describedby={`${id}-accurate-description`}
             className="order-1 after:absolute after:inset-0 mt-1"
-            id={`${id}-advanced`}
-            value="advanced"
+            id={`${id}-accurate`}
+            value="accurate"
           />
           <div className="grid grow gap-1.5">
-            <Label htmlFor={`${id}-advanced`} className="font-semibold text-base text-foreground cursor-pointer">
-              Advanced Mode
+            <Label htmlFor={`${id}-accurate`} className="font-semibold text-base text-foreground cursor-pointer">
+              Accurate
             </Label>
             <p
               className="text-muted-foreground text-sm leading-relaxed"
-              id={`${id}-advanced-description`}
+              id={`${id}-accurate-description`}
             >
               Deep analysis for complex tables with merged cells, nested headers, dense unstructured data, or poor image quality.
             </p>

@@ -141,7 +141,7 @@ const getColor = (confidence: number) => {
 
 export default function ExtractPage() {
   const [activeTab, setActiveTab] = useState(0);
-  const [extractionMode, setExtractionMode] = useState<"fast" | "advanced">("fast");
+  const [extractionMode, setExtractionMode] = useState<"fast" | "accurate">("fast");
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);

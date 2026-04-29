@@ -67,6 +67,24 @@ def _norm_bbox(bbox: Any) -> list[int] | None:
     return [x0, y0, x1, y1] if x1 > x0 and y1 > y0 else None
 
 
+def _to_rel_bbox(box: Any, pw: float, ph: float) -> list[float] | None:
+    """Convert absolute pixel bbox to relative [0-1] coords.
+
+    Parameters ``pw`` and ``ph`` are passed explicitly to avoid Python
+    closure late-binding issues when used inside loops.
+    """
+    if not box or len(box) != 4:
+        return None
+    if pw <= 0 or ph <= 0:
+        return None
+    return [
+        round(float(box[0]) / pw, 6),
+        round(float(box[1]) / ph, 6),
+        round(float(box[2]) / pw, 6),
+        round(float(box[3]) / ph, 6),
+    ]
+
+
 def _stem_to_page_num(stem: str) -> int:
     m = re.search(r"(\d+)$", stem)
     return int(m.group(1)) - 1 if m else 0
@@ -139,7 +157,7 @@ def _detect_and_crop(
 
     predictor = _get_layout_predictor()
     crops_dir.mkdir(parents=True, exist_ok=True)
-    detections_by_stem: dict[str, list[dict]] = {}
+    detections_by_stem: dict[str, dict] = {}
 
     for page_path in page_paths:
         stem = page_path.stem
@@ -192,7 +210,10 @@ def _detect_and_crop(
                 }, indent=2),
                 encoding="utf-8",
             )
-            detections_by_stem[stem] = crops_meta
+            detections_by_stem[stem] = {
+                "crops": crops_meta,
+                "page_size": [orig_w, orig_h]
+            }
 
     return detections_by_stem
 
@@ -227,7 +248,7 @@ def _clean_text(text: str) -> str:
 
 def _parse_tdatr_output(
     tdatr_results: list[dict],
-    detections_by_stem: dict[str, list[dict]],
+    detections_by_stem: dict[str, dict],
 ) -> list[dict]:
     """Convert in-memory TDATR result dicts to the normalized format
     expected by ``_store_results``.
@@ -239,7 +260,14 @@ def _parse_tdatr_output(
 
     for payload in tdatr_results:
         stem = Path(payload.get("image_path", "")).stem
-        surya = detections_by_stem.get(stem, [])
+        entry = detections_by_stem.get(stem, {})
+        surya = entry.get("crops", [])
+        # Use explicit local vars — avoids Python closure late-binding issues
+        page_size = entry.get("page_size", [1, 1])
+        pw: float = float(page_size[0]) if page_size and page_size[0] > 0 else 0.0
+        ph: float = float(page_size[1]) if page_size and page_size[1] > 0 else 0.0
+
+        _log(f"[parse] stem={stem!r} pw={pw} ph={ph} surya_crops={len(surya)}")
 
         for table in sorted(payload.get("tables", []), key=lambda t: int(t.get("table_index", 0))):
             tidx = int(table.get("table_index", 0))
@@ -254,7 +282,7 @@ def _parse_tdatr_output(
                         "row": int(cell.get("row_id", row_idx)),
                         "col": col_idx,
                         "text": _clean_text(str(cell.get("text", ""))),
-                        "bbox": _norm_bbox(cell.get("box")),
+                        "bbox": _to_rel_bbox(cell.get("box"), pw, ph),
                         "rowspan": 1,
                         "colspan": 1,
                         "confidence": 1.0,
@@ -262,15 +290,25 @@ def _parse_tdatr_output(
                     })
 
             det_conf = surya[tidx]["score"] if tidx < len(surya) else 1.0
-            bbox = _norm_bbox(table.get("bbox"))
-            if bbox is None and tidx < len(surya):
-                bbox = _norm_bbox(surya[tidx].get("bbox_orig_space"))
+
+            # Prefer the surya bbox (stored in orig page-pixel space) for
+            # the table-level bounding box — TDATR's bbox_output is in the
+            # same space, but the surya one is always available.
+            abs_bbox = (
+                surya[tidx].get("bbox_orig_space")
+                if tidx < len(surya)
+                else table.get("bbox")
+            )
+            if abs_bbox is None:
+                abs_bbox = table.get("bbox")
+
+            _log(f"[parse] table={tidx} abs_bbox={abs_bbox} -> rel={_to_rel_bbox(abs_bbox, pw, ph)}")
 
             results.append({
                 "stem": stem,
                 "page_num": _stem_to_page_num(stem),
                 "table_index": tidx,
-                "bbox": bbox,
+                "bbox": _to_rel_bbox(abs_bbox, pw, ph),
                 "detection_confidence": det_conf,
                 "cells": cells,
             })

@@ -439,22 +439,86 @@ class Dataset_infer():
         img = self.to_tensor(img)
         return img, scale, img_shape, scale_r
     
-    def process_cell_info(self, cell_boxes, cell_texts, cell_spans_html):
+    def process_cell_info(self, cell_boxes, cell_texts, cell_spans_html, cell_confidences=None):
         c = 0
         cells_list = list()
         for id, cells in enumerate(cell_spans_html):
             cell_row_list = list()
             for c_id,cell in enumerate(cells):
+                confidence = 1.0
+                if cell_confidences and id < len(cell_confidences) and c_id < len(cell_confidences[id]):
+                    confidence = float(cell_confidences[id][c_id])
                 cell_temp = dict(
                     row_id = id,
                     text = cell_texts[id][c_id],
                     box = cell_boxes[c].tolist(),
                     span_html = cell,
+                    confidence = confidence,
                 )
                 c=c+1
                 cell_row_list.append(cell_temp)
             cells_list.append(cell_row_list)
         return cells_list
+
+
+def _compute_cell_confidences_from_lprobs(tokenizer, gen_tokens, gen_lprobs, cell_ranges):
+    """Map decoder token log-probs to a per-cell confidence in [0, 1]."""
+    if gen_lprobs is None:
+        return [[1.0 for _ in row] for row in cell_ranges]
+
+    if hasattr(gen_lprobs, "detach"):
+        lprobs = gen_lprobs.detach().cpu().tolist()
+    else:
+        lprobs = list(gen_lprobs)
+    token_count = len(lprobs)
+    if token_count == 0:
+        return [[1.0 for _ in row] for row in cell_ranges]
+
+    confidences = []
+    for row in cell_ranges:
+        row_confidences = []
+        for c_i, c_j in row:
+            c_i = int(c_i)
+            c_j = int(c_j)
+            if c_i < 0 or c_j < c_i:
+                row_confidences.append(1.0)
+                continue
+
+            token_temp = gen_tokens[c_i:c_j + 1]
+            begin_id = 0
+            end_id = len(token_temp) - 1
+            try:
+                end_id_e = token_temp.index(tokenizer.cell_e_id)
+                if end_id_e != -1:
+                    end_id = end_id_e
+            except Exception:
+                pass
+
+            if tokenizer.row_span_id in token_temp or tokenizer.col_span_id in token_temp:
+                try:
+                    begin_id_temp = token_temp.index(tokenizer.span_e)
+                    if begin_id_temp != -1:
+                        begin_id = begin_id_temp
+                except Exception:
+                    pass
+
+            start = c_i + begin_id + 1
+            end = c_i + end_id
+            if end <= start:
+                start, end = c_i, c_j + 1
+
+            start = max(0, min(start, token_count))
+            end = max(start, min(end, token_count))
+            if end <= start:
+                row_confidences.append(1.0)
+                continue
+
+            avg_logp = float(np.mean(lprobs[start:end]))
+            confidence = float(np.exp(avg_logp))
+            confidence = max(0.0, min(1.0, confidence))
+            row_confidences.append(round(confidence, 6))
+        confidences.append(row_confidences)
+    return confidences
 
 
 def run_tsr_on_table(
@@ -487,7 +551,7 @@ def run_tsr_on_table(
         }
     )
 
-    _, raw_answer, clear_answer, _, _, _, cell_boxes_pred, cell_span_html, cell_texts = single_prompt_process_cfgi(
+    _, raw_answer, clear_answer, _, _, _, cell_boxes_pred, cell_span_html, cell_texts, cell_confidences = single_prompt_process_cfgi(
         model,
         tokenizer,
         eos_token,
@@ -509,7 +573,7 @@ def run_tsr_on_table(
         raw_scale,
         cell_boxes_pred,
     )
-    return raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts
+    return raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts, cell_confidences
 
 
 def build_table_answer(
@@ -519,12 +583,18 @@ def build_table_answer(
     cell_boxes_pred,
     cell_texts,
     cell_span_html,
+    cell_confidences=None,
 ):
     return dict(
         query=QUERY_TEXT,
         clear_answer=clear_answer,
         raw_answer=raw_answer,
-        cells=dataset.process_cell_info(cell_boxes_pred, cell_texts, cell_span_html),
+        cells=dataset.process_cell_info(
+            cell_boxes_pred,
+            cell_texts,
+            cell_span_html,
+            cell_confidences=cell_confidences,
+        ),
     )
 
 def main(cfg) -> None:
@@ -668,7 +738,7 @@ def main(cfg) -> None:
                 table_index = table_idx
                 crop_size = [x1 - x0, y1 - y0]
 
-            raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts = run_tsr_on_table(
+            raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts, cell_confidences = run_tsr_on_table(
                 model=model,
                 tokenizer=tokenizer,
                 dataset=dataset,
@@ -699,6 +769,7 @@ def main(cfg) -> None:
                 cell_boxes_pred=cell_boxes_output,
                 cell_texts=cell_texts,
                 cell_span_html=cell_span_html,
+                cell_confidences=cell_confidences,
             )
             table_results.append(
                 dict(
@@ -807,7 +878,7 @@ def single_prompt_process_cfgi(model,tokenizer, eos_token, prompt, image_tensor,
             img_embeds=img_embeds,
             inputs_embeds_length=inputs_embeds_length,
             tokens_to_generate=max_new_tokens,
-            return_output_log_probs=False,
+            return_output_log_probs=True,
             top_k_sampling=sampling_topk,
             top_p_sampling=sampling_topp,
             temperature=temperature,
@@ -822,11 +893,19 @@ def single_prompt_process_cfgi(model,tokenizer, eos_token, prompt, image_tensor,
         # 需要在此基础上，返回隐藏层状态
         raw_answer = outputs[0]["generate"]
         gen_tokens = outputs[0]["gen_token"]
+        gen_lprobs = outputs[0].get("lprobs")
 
         out_answer = raw_answer.replace(eos_token, "")
         out_answer = out_answer.replace('<iflytek_ret>', '\n')
 
         cell_ranges, cell_spans,cell_texts = tokenizer.call_decoder_cell_ranges_and_cell_span(gen_tokens, bias=(current_len-1))
+        cell_ranges_no_bias, _, _ = tokenizer.call_decoder_cell_ranges_and_cell_span(gen_tokens, bias=0)
+        cell_confidences = _compute_cell_confidences_from_lprobs(
+            tokenizer=tokenizer,
+            gen_tokens=gen_tokens,
+            gen_lprobs=gen_lprobs,
+            cell_ranges=cell_ranges_no_bias,
+        )
         cfgi_hidden_state,row_position,pred_row,pred_col = model.aggregate_cell_tokens( hidden_state_list, cell_range_ids=cell_ranges)
         
         
@@ -859,7 +938,7 @@ def single_prompt_process_cfgi(model,tokenizer, eos_token, prompt, image_tensor,
     except:
         pass
     return prompt, raw_answer, out_answer, gen_tokens, embs, context_length_ywx, \
-        cell_boxes_pred, cell_spans, cell_texts
+        cell_boxes_pred, cell_spans, cell_texts, cell_confidences
 
 def bbox_cxcywh_to_xyxy(bbox):
     """Convert bbox coordinates from (cx, cy, w, h) to (x1, y1, x2, y2).

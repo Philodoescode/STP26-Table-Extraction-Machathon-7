@@ -322,7 +322,7 @@ class TDATRPredictor:
                 table_index = detection.get("table_index", table_idx)
                 crop_size = detection.get("crop_size")
 
-                raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts = (
+                raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts, cell_confidences = (
                     self._run_tsr_on_table(
                         model=self._model,
                         tokenizer=self._tokenizer,
@@ -352,6 +352,7 @@ class TDATRPredictor:
                     cell_boxes_pred=cell_boxes_output,
                     cell_texts=cell_texts,
                     cell_span_html=cell_span_html,
+                    cell_confidences=cell_confidences,
                 )
                 table_results.append(
                     dict(

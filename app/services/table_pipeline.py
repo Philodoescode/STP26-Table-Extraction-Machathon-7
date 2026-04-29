@@ -257,7 +257,7 @@ def _parse_tdatr_output(
                         "bbox": _norm_bbox(cell.get("box")),
                         "rowspan": 1,
                         "colspan": 1,
-                        "confidence": 1.0,
+                        "confidence": float(cell.get("confidence", 1.0)),
                         "flagged": False,
                     })
 

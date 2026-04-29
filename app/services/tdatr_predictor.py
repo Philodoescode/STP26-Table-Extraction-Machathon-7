@@ -365,15 +365,27 @@ class TDATRPredictor:
                     )
                     bbox_output = [x0, y0, x1, y1]
 
-                answer = self._build_table_answer(
+                answer_kwargs = dict(
                     dataset=self._dataset,
                     raw_answer=raw_answer,
                     clear_answer=clear_answer,
                     cell_boxes_pred=cell_boxes_output,
                     cell_texts=cell_texts,
                     cell_span_html=cell_span_html,
-                    cell_confidences=cell_confidences,
                 )
+                if cell_confidences is not None:
+                    answer_kwargs["cell_confidences"] = cell_confidences
+
+                try:
+                    answer = self._build_table_answer(**answer_kwargs)
+                except TypeError as exc:
+                    # Backward compatibility with older TDATR infer.py that does
+                    # not accept `cell_confidences` in build_table_answer().
+                    if "cell_confidences" in str(exc):
+                        answer_kwargs.pop("cell_confidences", None)
+                        answer = self._build_table_answer(**answer_kwargs)
+                    else:
+                        raise
                 table_results.append(
                     dict(
                         table_index=table_index,

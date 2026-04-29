@@ -13,7 +13,8 @@ services:
 
       # Live-mount source code (no rebuild needed for Python changes)
       - ./app:/app/app
-      # TDATR code is now baked into the image (no volume mount needed)
+      # Live-mount TDATR code for fast iteration (no rebuild needed for TDATR Python edits)
+      - ./TDATR:/app/TDATR
 
       # TDATR model checkpoint (single .pt file, read-only)
       # Set HOST_TDATR_CHECKPOINT in .env to the absolute path of the model.pt file

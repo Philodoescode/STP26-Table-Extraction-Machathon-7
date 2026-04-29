@@ -58,7 +58,7 @@ models_volume = modal.Volume.from_name(
         "SURYA_LAYOUT_MODEL_DIR": f"{MODELS_MOUNT}/surya_layout",
         "CORS_ORIGINS": os.getenv(
             "CORS_ORIGINS",
-            "[\"http://localhost:5173\",\"http://localhost:3000\"]",
+            "[\"http://localhost:5173\",\"http://localhost:3000\",\"https://table-extraction-front.onrender.com\"]",
         ),
     },
 )

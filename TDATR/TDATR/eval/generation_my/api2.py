@@ -109,11 +109,14 @@ def gen_output(prompt_token, prompt_len, gen_token, gen_len, prob, tokenizer):
     """
         tokenizer donot always ensure detok(tok(x))=x, e.g., continuous space, tabel, return, in some tokenizer
     """
-    prompt_token= prompt_token.cpu().tolist()
-    gen_token= gen_token.cpu().tolist()
+    prompt_len = int(prompt_len.item()) if hasattr(prompt_len, "item") else int(prompt_len)
+    gen_len = int(gen_len.item()) if hasattr(gen_len, "item") else int(gen_len)
+
+    prompt_token = prompt_token.cpu().tolist()
+    gen_token = gen_token.cpu().tolist()
     prompt_token = prompt_token[:prompt_len]
     gen_token = gen_token[prompt_len:gen_len]
-    prob= prob[prompt_len:gen_len] if prob else None
+    prob = prob[prompt_len:gen_len] if prob is not None else None
 
     
 

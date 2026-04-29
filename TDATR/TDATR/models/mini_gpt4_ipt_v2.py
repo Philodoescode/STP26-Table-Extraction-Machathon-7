@@ -318,9 +318,10 @@ class MiniGPT4(Blip2Base):
         logger.info("Load Checkpoint: {}".format(cfg.ckpt))
 
         missing_keys, unexpected_keys = None, None
-        state_dict = torch.load(cfg.ckpt, map_location="cpu")
+        state_dict = torch.load(cfg.ckpt, map_location="cpu", mmap=True)
         
         msg = self.load_state_dict(state_dict=state_dict, strict=False)
+        del state_dict
         missing_keys = set(msg.missing_keys) if missing_keys is None else (missing_keys & set(msg.missing_keys))
         unexpected_keys = set(msg.unexpected_keys) if unexpected_keys is None else (unexpected_keys |  set(msg.unexpected_keys))
 

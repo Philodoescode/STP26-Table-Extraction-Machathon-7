@@ -224,10 +224,18 @@ class TDATRPredictor:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.cuda.set_device(0)
 
+        import gc
+        logger.info("Setting default dtype to float16 to save memory")
+        old_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(torch.float16)
+
         self._model = MiniGPT4(cfg).half()
+
+        torch.set_default_dtype(old_dtype)
         self._tokenizer = self._model.ipt_tokenizer
         self._model.eval()
         self._model = self._model.to(device=self._device)
+        gc.collect()
 
         # CFGI decoder components must be in train mode
         self._model.cfgi_decoder.neck.train()

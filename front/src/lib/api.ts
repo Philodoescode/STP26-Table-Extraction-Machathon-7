@@ -52,6 +52,20 @@ export interface ExportResponse {
   cached: boolean;
 }
 
+export interface MetricsSnapshot {
+  total_jobs: number;
+  success_count: number;
+  failure_count: number;
+  avg_latency_ms: number | null;
+  p95_latency_ms: number | null;
+  gpu_available: boolean;
+  gpu_name: string | null;
+  gpu_utilization_pct: number | null;
+  gpu_memory_used_mb: number | null;
+  gpu_memory_total_mb: number | null;
+  jobs_per_minute: number;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export const api = {
@@ -99,6 +113,12 @@ export const api = {
       body: formData,
     });
     if (!res.ok) throw new Error("Failed to create job");
+    return res.json();
+  },
+
+  async getMetrics(): Promise<MetricsSnapshot> {
+    const res = await fetch(`${API_BASE_URL}/metrics`);
+    if (!res.ok) throw new Error("Failed to fetch metrics");
     return res.json();
   }
 };

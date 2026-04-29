@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { IconTextRecognition, IconMoodPuzzled } from '@tabler/icons-react';
 import { Progress } from "@/components/ui/progress";
+import { type Detection } from "@/lib/extract-utils";
 import {
   Table,
   TableHeader,
@@ -27,6 +28,7 @@ interface ExtractResultsProps {
   setSelectedRegion: (id: string | null) => void;
   hoveredRegion: string | null;
   setHoveredRegion: (id: string | null) => void;
+  currentPageDetections: Detection[];
 }
 
 export default function ExtractResults({
@@ -39,7 +41,8 @@ export default function ExtractResults({
   selectedRegion,
   setSelectedRegion,
   hoveredRegion,
-  setHoveredRegion
+  setHoveredRegion,
+  currentPageDetections
 }: ExtractResultsProps) {
   if (!isProcessing && !hasProcessed) {
     return (
@@ -112,7 +115,7 @@ export default function ExtractResults({
             )}>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-medium tracking-wider">
-                  {regionId.replace('-', '_')}
+                  {currentPageDetections.find(d => d.id === regionId)?.label || regionId.replace('-', '_')}
                 </span>
               </div>
               <span className="text-xs text-muted-foreground">

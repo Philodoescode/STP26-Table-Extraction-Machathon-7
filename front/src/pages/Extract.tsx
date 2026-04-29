@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { usePdfRasterizer } from "@/hooks/use-pdf-rasterizer";
 import { useExtractProcessor } from "@/hooks/use-extract-processor";
@@ -63,6 +63,15 @@ export default function ExtractPage() {
   // Derived state
   const previewUrl = files[0]?.preview || null;
   const displayUrl = pdfPages.length > 0 ? pdfPages[currentPage - 1] : previewUrl;
+
+  useEffect(() => {
+    // Reset document state on change or removal
+    setHoveredRegion(null);
+    setSelectedRegion(null);
+    setZoomedRegion(null);
+    setImageSize({ width: 0, height: 0 });
+    setActiveTab(0);
+  }, [files]);
 
   const currentPageDetections = useMemo(() => {
     return detections.filter(det => !det.page || det.page === currentPage);
@@ -171,6 +180,7 @@ export default function ExtractPage() {
                 setSelectedRegion={setSelectedRegion}
                 hoveredRegion={hoveredRegion}
                 setHoveredRegion={setHoveredRegion}
+                currentPageDetections={currentPageDetections}
               />
             }
           />

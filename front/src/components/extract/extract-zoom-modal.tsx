@@ -69,7 +69,7 @@ export default function ExtractZoomModal({
           <div className="flex items-center gap-2">
             <IconZoomIn className="size-5 text-primary" />
             <h3 className="font-medium text-sm">
-              Region Inspector: <span className="font-mono text-primary">{zoomedRegion.id.replace('-', '_')}</span>
+              Region Inspector: <span className="font-mono text-primary">{zoomedRegion.label}</span>
             </h3>
           </div>
           <button 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type Detection, parseCSV, MOCK_DATA } from "@/lib/extract-utils";
 
 export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
@@ -7,6 +7,14 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
   const [progress, setProgress] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [tableData, setTableData] = useState<Record<string, string[][]>>({});
+
+  useEffect(() => {
+    setIsProcessing(false);
+    setHasProcessed(false);
+    setProgress(0);
+    setDetections([]);
+    setTableData({});
+  }, [files]);
 
   const processFiles = (onStart?: () => void) => {
     if (files.length === 0) return;
@@ -46,10 +54,10 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
         
         setTableData(newTableData);
         
-        const mappedDetections = mock.detections.map((d: any) => ({
+        const mappedDetections = mock.detections.map((d: any, i: number) => ({
           id: d.id,
           bbox: d.bbox,
-          label: "Table",
+          label: `Table ${i + 1}`,
           confidence: d.detection_confidence,
           type: 'table' as const,
           page: (d.page_num || 0) + 1

@@ -7,9 +7,9 @@ class Settings(BaseSettings):
     database_path: str = "./storage/jobs.db"
 
     # TDATR model paths (WSL paths when running under WSL)
-    tdatr_repo_dir: str = "/home/yousif/TDATR"
-    tdatr_checkpoint_path: str = "/home/yousif/TDATR/model.pt"
-    surya_layout_model_dir: str = "/home/yousif/surya_layout_model"
+    tdatr_repo_dir: str = "./TDATR"
+    tdatr_checkpoint_path: str = "C:/Users/afara/Downloads/STP/E2E_model/model-002.pt"
+    surya_layout_model_dir: str = "C:/Users/afara/Downloads/STP/LT_model"
 
     # Detection config
     table_detection_threshold: float = 0.0
@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 @lru_cache

@@ -51,8 +51,13 @@ RUN pip install --no-cache-dir hydra-core==1.3.2 omegaconf==2.3.0
 # ── application code ─────────────────────────────────────────────────────────
 COPY app/ ./app/
 
+# Bundled TDATR model code (no external volume mount needed)
+# Checkpoint (.pt) and Surya model are still volume-mounted (large binaries)
+COPY TDATR/ ./TDATR/
+
 # Storage directory (will be overridden by volume mount at runtime)
 RUN mkdir -p /app/storage
+
 
 # ── healthcheck ──────────────────────────────────────────────────────────────
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s \

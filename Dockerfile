@@ -1,5 +1,5 @@
 # CUDA 12.8 + cuDNN runtime — requires host driver >= 570.x
-FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-base-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

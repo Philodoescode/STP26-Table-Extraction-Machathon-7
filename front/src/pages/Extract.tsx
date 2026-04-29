@@ -13,10 +13,13 @@ import ExtractZoomModal from "@/components/extract/extract-zoom-modal";
 import ExtractFooter from "@/components/extract/extract-footer";
 import ExtractTabs from "@/components/extract-tabs";
 import ExtractConfigRadioBtns from "@/components/extract-config-radio-btns";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function ExtractPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [extractionMode, setExtractionMode] = useState<"fast" | "accurate">("fast");
+  const [showConfidence, setShowConfidence] = useState(true);
   
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export default function ExtractPage() {
     progress,
     detections,
     tableData,
+    cellConfidenceData,
     setTableData,
     processFiles,
     updateCellOverride,
@@ -110,6 +114,16 @@ export default function ExtractPage() {
     }
     return groups;
   }, [tableData, currentPageRegionIds]);
+
+  const groupedConfidenceData = useMemo(() => {
+    const groups: Record<string, number[][]> = {};
+    for (const [regionId, rows] of Object.entries(cellConfidenceData)) {
+      if (currentPageRegionIds.has(regionId)) {
+        groups[regionId] = rows;
+      }
+    }
+    return groups;
+  }, [cellConfidenceData, currentPageRegionIds]);
 
   const handleDetectionClick = (id: string) => {
     setSelectedRegion(id);
@@ -180,11 +194,15 @@ export default function ExtractPage() {
             activeTab={activeTab}
             onTabChange={setActiveTab}
             configContent={
-              <div className="h-full flex flex-col items-center justify-center">
+              <div className="h-full flex flex-col items-center justify-center space-y-6">
                 <ExtractConfigRadioBtns 
                   mode={extractionMode} 
                   onChange={setExtractionMode} 
                 />
+                <div className="flex items-center gap-3 p-4 border border-border rounded-lg bg-background/50">
+                  <Switch id="show-confidence" checked={showConfidence} onCheckedChange={setShowConfidence} />
+                  <Label htmlFor="show-confidence" className="text-sm font-medium cursor-pointer">Show Confidence Levels</Label>
+                </div>
               </div>
             }
             resultsContent={
@@ -194,6 +212,8 @@ export default function ExtractPage() {
                 progress={progress}
                 extractionMode={extractionMode}
                 groupedData={groupedData}
+                groupedConfidenceData={groupedConfidenceData}
+                showConfidence={showConfidence}
                 setTableData={setTableData}
                 selectedRegion={selectedRegion}
                 setSelectedRegion={setSelectedRegion}
@@ -207,10 +227,7 @@ export default function ExtractPage() {
         </section>
       </main>
 
-      <ExtractFooter 
-        isProcessing={isProcessing}
-        hasProcessed={hasProcessed}
-      />
+      <ExtractFooter />
     </div>
   );
 }

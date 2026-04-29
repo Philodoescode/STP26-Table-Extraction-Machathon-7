@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
 import { IconTextRecognition, IconMoodPuzzled } from '@tabler/icons-react';
 import { Progress } from "@/components/ui/progress";
-import { type Detection } from "@/lib/extract-utils";
+import { Badge } from "@/components/ui/badge";
+import { type Detection, getColor } from "@/lib/extract-utils";
 import {
   Table,
   TableHeader,
@@ -23,6 +24,8 @@ interface ExtractResultsProps {
   progress: number;
   extractionMode: string;
   groupedData: Record<string, string[][]>;
+  groupedConfidenceData: Record<string, number[][]>;
+  showConfidence: boolean;
   setTableData: React.Dispatch<React.SetStateAction<Record<string, string[][]>>>;
   selectedRegion: string | null;
   setSelectedRegion: (id: string | null) => void;
@@ -38,6 +41,8 @@ export default function ExtractResults({
   progress,
   extractionMode,
   groupedData,
+  groupedConfidenceData,
+  showConfidence,
   setTableData,
   selectedRegion,
   setSelectedRegion,
@@ -119,6 +124,15 @@ export default function ExtractResults({
                 <span className="text-xs font-mono font-medium tracking-wider">
                   {currentPageDetections.find(d => d.id === regionId)?.label || regionId.replace('-', '_')}
                 </span>
+                {showConfidence && currentPageDetections.find(d => d.id === regionId) && (() => {
+                  const conf = currentPageDetections.find(d => d.id === regionId)!.confidence;
+                  const colorStyle = getColor(conf);
+                  return (
+                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono shadow-sm bg-transparent" style={{ borderColor: colorStyle.stroke, color: colorStyle.stroke, backgroundColor: colorStyle.fill }}>
+                      Det {(conf * 100).toFixed(2)}%
+                    </Badge>
+                  );
+                })()}
               </div>
               <span className="text-xs text-muted-foreground">
                 {rows.length} rows detected
@@ -139,9 +153,22 @@ export default function ExtractResults({
                   {rows.map((row, rIdx) => (
                     <TableRow key={rIdx} className="group">
                       {row.map((cell, cIdx) => (
-                        <TableCell key={cIdx} className="p-0 border-r border-border">
+                        <TableCell key={cIdx} className="p-0 border-r border-border relative">
+                          {showConfidence && groupedConfidenceData[regionId]?.[rIdx]?.[cIdx] !== undefined && (() => {
+                            const conf = groupedConfidenceData[regionId][rIdx][cIdx];
+                            const colorStyle = getColor(conf);
+                            return (
+                              <div 
+                                className="absolute top-1 right-1 pointer-events-none text-[9px] font-mono select-none z-20 font-medium opacity-70" 
+                                style={{ color: colorStyle.stroke }} 
+                                title={`Structure Confidence: ${(conf * 100).toFixed(2)}%`}
+                              >
+                                {(conf * 100).toFixed(2)}%
+                              </div>
+                            );
+                          })()}
                           <input
-                            className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm"
+                            className="w-full bg-transparent px-4 py-3 outline-none focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-primary transition-all text-sm relative z-10"
                             value={cell}
                             onChange={(e) => {
                               setTableData(prev => {

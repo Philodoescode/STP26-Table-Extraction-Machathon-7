@@ -224,10 +224,18 @@ class TDATRPredictor:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.cuda.set_device(0)
 
+        import gc
+        logger.info("Setting default dtype to float16 to save memory")
+        old_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(torch.float16)
+
         self._model = MiniGPT4(cfg).half()
+
+        torch.set_default_dtype(old_dtype)
         self._tokenizer = self._model.ipt_tokenizer
         self._model.eval()
         self._model = self._model.to(device=self._device)
+        gc.collect()
 
         # CFGI decoder components must be in train mode
         self._model.cfgi_decoder.neck.train()
@@ -314,19 +322,39 @@ class TDATRPredictor:
                 table_index = detection.get("table_index", table_idx)
                 crop_size = detection.get("crop_size")
 
-                raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts = (
-                    self._run_tsr_on_table(
-                        model=self._model,
-                        tokenizer=self._tokenizer,
-                        dataset=self._dataset,
-                        device=self._device,
-                        eos_token=self._eos_token,
-                        image_input=crop_image,
-                        image_info_path=image_path,
-                        DetDataSample=self._DetDataSample,
-                        InstanceData=self._InstanceData,
-                    )
+                tsr_output = self._run_tsr_on_table(
+                    model=self._model,
+                    tokenizer=self._tokenizer,
+                    dataset=self._dataset,
+                    device=self._device,
+                    eos_token=self._eos_token,
+                    image_input=crop_image,
+                    image_info_path=image_path,
+                    DetDataSample=self._DetDataSample,
+                    InstanceData=self._InstanceData,
                 )
+
+                # Backward compatibility:
+                # - old TDATR infer returns 5 values (no cell_confidences)
+                # - new TDATR infer returns 6 values (with cell_confidences)
+                if len(tsr_output) == 6:
+                    (
+                        raw_answer,
+                        clear_answer,
+                        cell_boxes_pred,
+                        cell_span_html,
+                        cell_texts,
+                        cell_confidences,
+                    ) = tsr_output
+                else:
+                    (
+                        raw_answer,
+                        clear_answer,
+                        cell_boxes_pred,
+                        cell_span_html,
+                        cell_texts,
+                    ) = tsr_output
+                    cell_confidences = None
 
                 if x1 is None:
                     cell_boxes_output = cell_boxes_pred
@@ -337,7 +365,7 @@ class TDATRPredictor:
                     )
                     bbox_output = [x0, y0, x1, y1]
 
-                answer = self._build_table_answer(
+                answer_kwargs = dict(
                     dataset=self._dataset,
                     raw_answer=raw_answer,
                     clear_answer=clear_answer,
@@ -345,6 +373,19 @@ class TDATRPredictor:
                     cell_texts=cell_texts,
                     cell_span_html=cell_span_html,
                 )
+                if cell_confidences is not None:
+                    answer_kwargs["cell_confidences"] = cell_confidences
+
+                try:
+                    answer = self._build_table_answer(**answer_kwargs)
+                except TypeError as exc:
+                    # Backward compatibility with older TDATR infer.py that does
+                    # not accept `cell_confidences` in build_table_answer().
+                    if "cell_confidences" in str(exc):
+                        answer_kwargs.pop("cell_confidences", None)
+                        answer = self._build_table_answer(**answer_kwargs)
+                    else:
+                        raise
                 table_results.append(
                     dict(
                         table_index=table_index,

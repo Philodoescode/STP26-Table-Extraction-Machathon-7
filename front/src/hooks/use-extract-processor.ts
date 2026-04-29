@@ -9,6 +9,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
   const [progress, setProgress] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [tableData, setTableData] = useState<Record<string, string[][]>>({});
+  const [cellConfidenceData, setCellConfidenceData] = useState<Record<string, number[][]>>({});
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,6 +19,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
     setProgress(0);
     setDetections([]);
     setTableData({});
+    setCellConfidenceData({});
     setJobId(null);
     setError(null);
   }, [files]);
@@ -70,17 +72,20 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
       setDetections(newDetections);
 
       const newTableData: Record<string, string[][]> = {};
+      const newCellConfidenceData: Record<string, number[][]> = {};
       await Promise.all(
         tables.map(async (t) => {
           try {
             const preview = await api.getTablePreview(job.job_id, t.id);
             newTableData[t.id] = transformPreviewTo2DArray(preview);
+            newCellConfidenceData[t.id] = preview.rows.map(row => row.map(cell => cell.confidence ?? 1.0));
           } catch (e) {
             console.error(`Failed to fetch preview for table ${t.id}`, e);
           }
         })
       );
       setTableData(newTableData);
+      setCellConfidenceData(newCellConfidenceData);
 
       setIsProcessing(false);
       setHasProcessed(true);
@@ -110,6 +115,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
     progress,
     detections,
     tableData,
+    cellConfidenceData,
     jobId,
     error,
     setTableData,

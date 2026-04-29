@@ -34,7 +34,7 @@ interface ExtractViewerProps {
   
   onDetectionClick: (id: string) => void;
   onDetectionDoubleClick: (det: Detection) => void;
-
+  
   mapRatio: number; // ADDED THIS
 }
 
@@ -160,27 +160,7 @@ export default function ExtractViewer({
                               const y = det.bbox[1] * mapRatio;
                               const w = (det.bbox[2] - det.bbox[0]) * mapRatio;
                               const h = (det.bbox[3] - det.bbox[1]) * mapRatio;
-                              // Detect coordinate format:
-                              // - New format: all values are 0–1 (relative)
-                              // - Old format: values are absolute pixels (legacy DB rows)
-                              const isRelative = det.bbox.every(v => v >= 0 && v <= 1.0);
-
-                              let x: number, y: number, w: number, h: number;
-                              if (isRelative) {
-                                // New format: multiply relative coords by display dimensions
-                                x = det.bbox[0] * imageSize.width;
-                                y = det.bbox[1] * imageSize.height;
-                                w = (det.bbox[2] - det.bbox[0]) * imageSize.width;
-                                h = (det.bbox[3] - det.bbox[1]) * imageSize.height;
-                              } else {
-                                // Legacy format: absolute pixel coords in backend image space
-                                // Render directly in the viewBox (which matches naturalWidth/naturalHeight)
-                                x = det.bbox[0];
-                                y = det.bbox[1];
-                                w = det.bbox[2] - det.bbox[0];
-                                h = det.bbox[3] - det.bbox[1];
-                              }
-
+                              
                               return (
                                 <g 
                                   key={det.id} 

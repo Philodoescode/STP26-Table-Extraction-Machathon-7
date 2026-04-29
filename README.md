@@ -62,6 +62,52 @@ The service is configured to use one NVIDIA GPU. Ensure your host has the `nvidi
 
 ## API Usage Quick Start
 
-1.  **Create a Job**: `POST /api/v1/jobs` with a PDF or image file.
+1.  **Create a Job**: `POST /api/v1/upload` with a PDF or image file.
 2.  **Poll Status**: `GET /api/v1/jobs/{job_id}` until `status` is `done`.
 3.  **Fetch Results**: `GET /api/v1/jobs/{job_id}/tables` to see the extracted data.
+
+---
+
+## Deploy on Modal (GPU)
+
+This repo includes a Modal entrypoint at `modal_app.py` that reuses the current `Dockerfile` and runs the same FastAPI backend on a GPU container.
+
+### 1. Install and authenticate Modal CLI
+
+```bash
+pip install modal
+modal setup
+```
+
+### 2. Create persistent volumes
+
+```bash
+modal volume create table-extraction-models
+modal volume create table-extraction-storage
+```
+
+### 3. Upload model weights to Modal volume
+
+```bash
+# Upload TDATR checkpoint
+modal volume put table-extraction-models /absolute/path/to/model.pt /model.pt
+
+# Upload Surya layout model directory
+modal volume put table-extraction-models /absolute/path/to/surya_layout /surya_layout
+```
+
+### 4. Deploy the app
+
+```bash
+# Optional overrides
+export MODAL_APP_NAME=table-extraction-api
+export MODAL_GPU=A10G
+export MODAL_MODELS_VOLUME=table-extraction-models
+export MODAL_STORAGE_VOLUME=table-extraction-storage
+export MODAL_MIN_CONTAINERS=0
+export MODAL_SCALEDOWN_WINDOW=600
+
+modal deploy modal_app.py
+```
+
+After deploy, Modal prints the public endpoint URL. Your API routes remain the same (for example, `/health`, `/api/v1/upload`, `/api/v1/jobs/{job_id}`).

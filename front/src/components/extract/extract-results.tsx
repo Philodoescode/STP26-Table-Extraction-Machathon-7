@@ -29,6 +29,7 @@ interface ExtractResultsProps {
   hoveredRegion: string | null;
   setHoveredRegion: (id: string | null) => void;
   currentPageDetections: Detection[];
+  updateCellOverride: (tableId: string, row: number, col: number, text: string) => void;
 }
 
 export default function ExtractResults({
@@ -42,7 +43,8 @@ export default function ExtractResults({
   setSelectedRegion,
   hoveredRegion,
   setHoveredRegion,
-  currentPageDetections
+  currentPageDetections,
+  updateCellOverride
 }: ExtractResultsProps) {
   if (!isProcessing && !hasProcessed) {
     return (
@@ -151,6 +153,9 @@ export default function ExtractResults({
                                 newData[regionId] = newRows;
                                 return newData;
                               });
+                            }}
+                            onBlur={(e) => {
+                              updateCellOverride(regionId, rIdx, cIdx, e.target.value);
                             }}
                           />
                         </TableCell>

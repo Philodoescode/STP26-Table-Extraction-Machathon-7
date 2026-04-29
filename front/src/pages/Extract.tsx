@@ -57,7 +57,9 @@ export default function ExtractPage() {
     detections,
     tableData,
     setTableData,
-    processFiles
+    processFiles,
+    updateCellOverride,
+    jobId
   } = useExtractProcessor(files, () => setActiveTab(1));
 
   // Derived state
@@ -105,8 +107,6 @@ export default function ExtractPage() {
         <ExtractZoomModal 
           zoomedRegion={zoomedRegion}
           onClose={() => setZoomedRegion(null)}
-          displayUrl={displayUrl}
-          imageSize={imageSize}
         />
       )}
 
@@ -115,7 +115,7 @@ export default function ExtractPage() {
           setSelectedRegion(null);
           processFiles();
         }}
-        onExport={() => handleExportCSV(hasProcessed, files, detections, tableData)}
+        onExport={() => handleExportCSV(jobId, hasProcessed, files)}
         isProcessing={isProcessing}
         hasProcessed={hasProcessed}
         hasFiles={files.length > 0}
@@ -181,6 +181,7 @@ export default function ExtractPage() {
                 hoveredRegion={hoveredRegion}
                 setHoveredRegion={setHoveredRegion}
                 currentPageDetections={currentPageDetections}
+                updateCellOverride={updateCellOverride}
               />
             }
           />

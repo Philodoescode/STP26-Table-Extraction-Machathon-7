@@ -178,3 +178,6 @@ cython_debug/
 storage/
 nul
 /E2E_model/model-002.pt
+
+
+opencode.json

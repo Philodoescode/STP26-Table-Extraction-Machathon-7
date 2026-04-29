@@ -1,65 +1,48 @@
-import React from "react";
-import { BoxIcon, HouseIcon, PanelsTopLeftIcon } from "lucide-react";
-
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import type { ReactNode } from "react";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 
-export interface TabItem {
-  id: string;
-  label: string;
-  content: React.ReactNode;
-  badge?: number;
+interface ExtractTabsProps {
+  activeTab: number;
+  onTabChange: (value: number) => void;
+  configContent: ReactNode;
+  resultsContent: ReactNode;
 }
 
-export interface TabsComponentProps {
-  tabs: TabItem[];
-  defaultTabId?: string;
-}
-
-export default function Component({ tabs, defaultTabId }: TabsComponentProps) {
-  const initialTab = defaultTabId || (tabs.length > 0 ? tabs[0].id : "tab-1");
-
-  if (tabs.length === 0) return null;
-
+export default function ExtractTabs({ activeTab, onTabChange, configContent, resultsContent }: ExtractTabsProps) {
   return (
-    <Tabs defaultValue={initialTab} className="w-full h-full flex flex-col">
-      <ScrollArea>
-        <TabsList className="relative mb-3 h-auto w-full justify-start gap-0.5 bg-transparent p-0 before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-border">
-          {tabs.map((tab, index) => (
-            <TabsTrigger
-              key={tab.id}
-              className="overflow-hidden rounded-b-none border-x border-t bg-muted py-2 data-[state=active]:z-10 data-[state=active]:shadow-none"
-              value={tab.id}
-            >
-              {index === 0 && <HouseIcon aria-hidden="true" className="-ms-0.5 me-1.5 opacity-60" size={16} />}
-              {index === 1 && <PanelsTopLeftIcon aria-hidden="true" className="-ms-0.5 me-1.5 opacity-60" size={16} />}
-              {index === 2 && <BoxIcon aria-hidden="true" className="-ms-0.5 me-1.5 opacity-60" size={16} />}
-              {tab.label}
-              {tab.badge !== undefined && (
-                <Badge
-                  className="ml-2 bg-primary/20 text-primary hover:bg-primary/20 border-transparent"
-                  variant="secondary"
-                >
-                  {tab.badge}
-                </Badge>
-              )}
-            </TabsTrigger>
-          ))}
+    <Tabs 
+      value={activeTab.toString()} 
+      onValueChange={(v) => onTabChange(parseInt(v, 10))} 
+      className="flex flex-col h-full w-full"
+    >
+      <div className="bg-muted/5 border-b border-border">
+        <TabsList className="h-auto rounded-none bg-transparent p-0 px-4 w-full justify-start shrink-0">
+          <TabsTrigger
+            className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
+            value="0"
+          >
+            Configuration
+          </TabsTrigger>
+          <TabsTrigger
+            className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
+            value="1"
+          >
+            Results
+          </TabsTrigger>
         </TabsList>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
-      <div className="flex-1 w-full relative">
-        {tabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="mt-0 h-full w-full">
-            {tab.content}
-          </TabsContent>
-        ))}
+      </div>
+      <div className="flex-1 min-h-0 relative">
+        <TabsContent value="0" className="absolute inset-0 overflow-y-auto p-6 m-0 focus-visible:outline-none">
+          {configContent}
+        </TabsContent>
+        <TabsContent value="1" className="absolute inset-0 overflow-y-auto p-6 m-0 focus-visible:outline-none scroll-smooth">
+          {resultsContent}
+        </TabsContent>
       </div>
     </Tabs>
   );

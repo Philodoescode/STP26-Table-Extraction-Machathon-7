@@ -46,6 +46,12 @@ export interface PreviewUpdateResponse {
   table_id: string;
 }
 
+export interface ExportResponse {
+  job_id: string;
+  download_url: string;
+  cached: boolean;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export const api = {
@@ -76,11 +82,19 @@ export const api = {
     if (!res.ok) throw new Error("Failed to update table preview");
     return res.json();
   },
+
+  async exportJob(jobId: string): Promise<ExportResponse> {
+    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/export`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to export job");
+    return res.json();
+  },
   
   async createJob(file: File): Promise<JobResponse> {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE_URL}/jobs`, {
+    const res = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
       body: formData,
     });

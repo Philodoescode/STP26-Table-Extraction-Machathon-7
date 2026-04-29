@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { api } from "./api";
 
 export interface Detection {
   id: string;
@@ -7,6 +7,7 @@ export interface Detection {
   confidence: number;
   type: 'table' | 'cell' | 'header';
   page?: number;
+  crop_url?: string;
 }
 
 export const parseCSV = (csvText: string): string[][] => {
@@ -54,54 +55,44 @@ export const getColor = (confidence: number) => {
 };
 
 export const handleExportCSV = async (
+  jobId: string | null,
   hasProcessed: boolean,
   files: any[],
-  detections: Detection[],
-  tableData: Record<string, string[][]>
+  baseFileName: string = "document"
 ) => {
-  if (!hasProcessed || files.length === 0) return;
+  if (!hasProcessed || files.length === 0 || !jobId) return;
 
-  const zip = new JSZip();
-  const fileObj = files[0].file;
-  const isPdf = fileObj instanceof File && fileObj.type === "application/pdf";
-  const uploadedFileName = fileObj instanceof File ? fileObj.name : fileObj.name || "document";
-  const baseName = uploadedFileName.includes('.') ? uploadedFileName.substring(0, uploadedFileName.lastIndexOf('.')) : uploadedFileName;
-
-  const regionPageMap = new Map<string, number>();
-  detections.forEach(det => {
-    if (det.page) regionPageMap.set(det.id, det.page);
-  });
-
-  let tableNo = 1;
-  for (const [regionId, rows] of Object.entries(tableData)) {
-    const csvRows = rows.map(row => {
-      return row.map(val => {
-        if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-          return `"${val.replace(/"/g, '""')}"`;
-        }
-        return val;
-      }).join(",");
-    });
-    const csvContent = csvRows.join("\n");
+  try {
+    const exportRes = await api.exportJob(jobId);
     
-    const page = regionPageMap.get(regionId) || 1;
-    let filePath = `${baseName}_table_${tableNo}.csv`;
+    // Create download link from the backend's download URL
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+    // We need to construct the full URL. The backend returns something like "/api/v1/jobs/123/csv"
+    // So we can strip the "/api/v1" part from baseUrl if download_url already includes it, or better just fetch it
     
-    if (isPdf) {
-      filePath = `page_${page}/${filePath}`;
-    }
+    // The safest way is to fetch the blob so we can control the filename
+    const res = await fetch(`${baseUrl.replace(/\/api\/v1\/?$/, '')}${exportRes.download_url}`);
+    if (!res.ok) throw new Error("Failed to download CSV");
     
-    zip.file(filePath, csvContent);
-    tableNo++;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    
+    const uploadedFileName = files[0]?.file?.name || baseFileName;
+    const baseName = uploadedFileName.includes('.') 
+      ? uploadedFileName.substring(0, uploadedFileName.lastIndexOf('.')) 
+      : uploadedFileName;
+      
+    a.download = `tables_${baseName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Export failed:", error);
+    // Let the component handle UI error toast if needed
+    throw error;
   }
-
-  const zipBlob = await zip.generateAsync({ type: "blob" });
-  const url = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${baseName}_extracted_tables.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 };

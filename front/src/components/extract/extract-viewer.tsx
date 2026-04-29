@@ -4,6 +4,7 @@ import ExtractPaginationBtns from "@/components/extract-pagination-btns";
 import { type Detection, getColor } from "@/lib/extract-utils";
 
 interface ExtractViewerProps {
+  // ... (keep your existing props)
   files: any[];
   isDragging: boolean;
   errors: string[];
@@ -33,6 +34,8 @@ interface ExtractViewerProps {
   
   onDetectionClick: (id: string) => void;
   onDetectionDoubleClick: (det: Detection) => void;
+  
+  mapRatio: number; // ADDED THIS
 }
 
 export default function ExtractViewer({
@@ -64,7 +67,8 @@ export default function ExtractViewer({
   setSelectedRegion,
   
   onDetectionClick,
-  onDetectionDoubleClick
+  onDetectionDoubleClick,
+  mapRatio // DESTRUCTURED HERE
 }: ExtractViewerProps) {
   return (
     <>
@@ -125,7 +129,6 @@ export default function ExtractViewer({
                       </p>
                     </div>
                   ) : displayUrl ? (
-                    // Strict bounding container handling flawless 1:1 viewbox mapping
                     <div 
                       className="relative inline-flex items-start shadow-md bg-background pointer-events-none"
                       style={{ maxWidth: '100%' }}
@@ -152,16 +155,11 @@ export default function ExtractViewer({
                               const isHovered = hoveredRegion === det.id;
                               const isSelected = selectedRegion === det.id;
                               
-                              // Exactly inverse the python backend's dynamic logic:
-                              // if img.width < 1000: scale = 1000 / img.width
-                              const scaleFactor = (imageSize.width > 0 && imageSize.width < 1000) 
-                                  ? (1000 / imageSize.width) 
-                                  : 1.0;
-                              
-                              const x = det.bbox[0] / scaleFactor;
-                              const y = det.bbox[1] / scaleFactor;
-                              const w = (det.bbox[2] - det.bbox[0]) / scaleFactor;
-                              const h = (det.bbox[3] - det.bbox[1]) / scaleFactor;
+                              // --- APPLY THE EXACT MATH RATIO HERE ---
+                              const x = det.bbox[0] * mapRatio;
+                              const y = det.bbox[1] * mapRatio;
+                              const w = (det.bbox[2] - det.bbox[0]) * mapRatio;
+                              const h = (det.bbox[3] - det.bbox[1]) * mapRatio;
                               
                               return (
                                 <g 

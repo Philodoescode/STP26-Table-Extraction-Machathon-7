@@ -18,13 +18,11 @@ export default function ExtractPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [extractionMode, setExtractionMode] = useState<"fast" | "accurate">("fast");
   
-  // Overlay specific states
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [zoomedRegion, setZoomedRegion] = useState<Detection | null>(null);
 
-  // File Upload Hook
   const [
     { files, isDragging, errors },
     {
@@ -38,10 +36,9 @@ export default function ExtractPage() {
     },
   ] = useFileUpload({
     accept: "image/*,application/pdf",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 5 * 1024 * 1024,
   });
 
-  // Extraction Logic Hooks
   const {
     pdfPages,
     currentPage,
@@ -62,12 +59,33 @@ export default function ExtractPage() {
     jobId
   } = useExtractProcessor(files, () => setActiveTab(1));
 
-  // Derived state
   const previewUrl = files[0]?.preview || null;
   const displayUrl = pdfPages.length > 0 ? pdfPages[currentPage - 1] : previewUrl;
 
+  // --- THE MASTER COORDINATE SYNC ALGORITHM ---
+  // Replicates the backend's Python scaling logic perfectly.
+  const mapRatio = useMemo(() => {
+    if (imageSize.width === 0) return 1.0;
+    const isPdf = files[0]?.file?.type === "application/pdf";
+    let backendWidth = imageSize.width;
+
+    if (isPdf) {
+      // Frontend rasterized at scale: 2.0. So base pts = width / 2.0
+      const basePts = imageSize.width / 2.0;
+      // Backend rasterizes at scale: 300 / 72
+      backendWidth = basePts * (300.0 / 72.0);
+    } 
+    
+    // Backend table_pipeline.py check: "if img.width < 1000: upscale to 1000"
+    if (backendWidth < 1000) {
+      backendWidth = 1000;
+    }
+
+    // Ratio = Frontend Display Width / Backend Inference Grid Width
+    return imageSize.width / backendWidth;
+  }, [imageSize.width, files]);
+
   useEffect(() => {
-    // Reset document state on change or removal
     setHoveredRegion(null);
     setSelectedRegion(null);
     setZoomedRegion(null);
@@ -153,6 +171,7 @@ export default function ExtractPage() {
             
             onDetectionClick={handleDetectionClick}
             onDetectionDoubleClick={setZoomedRegion}
+            mapRatio={mapRatio}
           />
         </section>
 

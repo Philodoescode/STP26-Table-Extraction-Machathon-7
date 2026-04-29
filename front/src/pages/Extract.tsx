@@ -31,7 +31,7 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
-import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconXFilled, IconFileTypePdf } from '@tabler/icons-react';
+import { IconTextRecognition, IconLetterXSmall, IconFileUploadFilled, IconZoomIn, IconXFilled, IconFileTypePdf, IconMoodPuzzled} from '@tabler/icons-react';
 
 export interface Detection {
   id: string;
@@ -720,13 +720,17 @@ export default function ExtractPage() {
                   </div>
                 ) : (
                   Object.keys(groupedData).length === 0 ? (
-                    <Empty className="my-10 h-auto min-h-[400px]">
-                      <EmptyMedia variant="icon">
-                        <IconTextRecognition />
-                      </EmptyMedia>
-                      <EmptyTitle>No Tables Extracted</EmptyTitle>
-                      <EmptyDescription>We couldn't detect any tables in this document.</EmptyDescription>
-                    </Empty>
+                    <div className="h-full min-h-[400px] flex items-center justify-center">
+                      <Empty className="w-full max-w-md mx-auto flex flex-col items-center justify-center text-center gap-2">
+                        <EmptyMedia variant="icon">
+                          <IconMoodPuzzled />
+                        </EmptyMedia>
+                        <EmptyTitle>No Tables Extracted</EmptyTitle>
+                        <EmptyDescription>
+                          We couldn't detect any tables in this document.
+                        </EmptyDescription>
+                      </Empty>
+                    </div>
                   ) : (
                     <div className="space-y-6 max-w-full pb-10">
                       {Object.entries(groupedData).map(([regionId, rows]) => {

@@ -98,16 +98,25 @@ class TDATRPredictor:
 
         # 2. Build OmegaConf config programmatically (replaces Hydra CLI)
         from omegaconf import OmegaConf, open_dict
+        from TDATR_utils.dataclass import HulkConfig
 
         cfg_path = repo / "configs" / "config.yaml"
-        cfg = OmegaConf.load(str(cfg_path))
+        yaml_cfg = OmegaConf.load(str(cfg_path))
+
+        # Merge with HulkConfig dataclass defaults so every expected key
+        # (common.seed, model_parallel.*, distributed_training.*, etc.)
+        # is present even when the YAML doesn't list it explicitly.
+        # This replicates what Hydra would do via structured configs.
+        dc_cfg = OmegaConf.structured(HulkConfig())
+        with open_dict(dc_cfg):
+            cfg = OmegaConf.merge(dc_cfg, yaml_cfg)
 
         # Apply the same overrides that _run_tdatr used to pass on the
         # command line.  Using open_dict because the schema is strict.
         with open_dict(cfg):
-            cfg.common.user_dir = str(repo / "TDATR")
             cfg.common.npu = True
             cfg.common.npu_jit_compile = False
+            cfg.common.seed = settings.tdatr_seed
             cfg.model.rectification_rotate_flag = False
             cfg.model.rectification_textline_height_flag = False
             cfg.task.use_ocr_plug = False
@@ -147,7 +156,15 @@ class TDATRPredictor:
         from TDATR_utils.global_context import global_context as gpc
         from TDATR_utils.global_variables import ParallelMode
 
-        # Manual single-GPU init: skip torch.distributed entirely.
+        # Manual single-GPU init: set up a trivial single-process group so
+        # that torch.distributed.get_rank() works in TDATR generation code.
+        import torch.distributed as dist
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend="gloo", init_method="tcp://127.0.0.1:29500",
+                rank=0, world_size=1,
+            )
+
         gpc.config = cfg
         gpc._global_ranks[ParallelMode.GLOBAL] = 0
         gpc._local_ranks[ParallelMode.GLOBAL] = 0
@@ -190,10 +207,6 @@ class TDATRPredictor:
 
         # Re-store potentially modified cfg
         gpc.config = cfg
-
-        # 6. Import user module (registers models/tokenizers)
-        from TDATR_utils.utils import import_user_module
-        import_user_module(cfg.common)
 
         # 7. Build model, tokenizer, dataset
         from TDATR.models.mini_gpt4_ipt_v2 import MiniGPT4

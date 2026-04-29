@@ -1,15 +1,56 @@
+import { useEffect, useRef } from 'react';
 import { IconZoomIn, IconXFilled } from '@tabler/icons-react';
 import { type Detection } from "@/lib/extract-utils";
 
 interface ExtractZoomModalProps {
   zoomedRegion: Detection;
   onClose: () => void;
+  displayUrl?: string | null;
+  mapRatio?: number;
 }
 
 export default function ExtractZoomModal({
   zoomedRegion,
   onClose,
+  displayUrl,
+  mapRatio = 1.0,
 }: ExtractZoomModalProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Fallback canvas drawing logic ONLY used if crop_url is missing
+  useEffect(() => {
+    if (zoomedRegion.crop_url || !displayUrl || !canvasRef.current) return;
+
+    const img = new Image();
+    img.src = displayUrl;
+    img.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const sx = zoomedRegion.bbox[0] * mapRatio;
+      const sy = zoomedRegion.bbox[1] * mapRatio;
+      const sWidth = (zoomedRegion.bbox[2] - zoomedRegion.bbox[0]) * mapRatio;
+      const sHeight = (zoomedRegion.bbox[3] - zoomedRegion.bbox[1]) * mapRatio;
+
+      const maxWidth = Math.min(800, window.innerWidth - 100);
+      const scale = maxWidth / sWidth;
+      
+      canvas.width = sWidth * scale;
+      canvas.height = sHeight * scale;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = false;
+      
+      ctx.drawImage(
+        img,
+        sx, sy, sWidth, sHeight,
+        0, 0, canvas.width, canvas.height 
+      );
+    };
+  }, [zoomedRegion, displayUrl, mapRatio]);
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
@@ -43,7 +84,12 @@ export default function ExtractZoomModal({
               onClick={onClose}
             />
           ) : (
-            <div className="text-muted-foreground p-10">Crop not available</div>
+            <canvas 
+              ref={canvasRef} 
+              className="max-w-full max-h-full object-contain border border-border shadow-lg rounded"
+              style={{ cursor: 'zoom-out' }}
+              onClick={onClose}
+            />
           )}
         </div>
       </div>

@@ -564,7 +564,7 @@ export default function ExtractPage() {
             activeTab={activeTab}
             onTabChange={setActiveTab}
             configContent={
-              <div className="h-full flex flex-col">
+              <div className="h-full flex flex-col items-center justify-center">
                 <ExtractConfigRadioBtns 
                   mode={extractionMode} 
                   onChange={setExtractionMode} 

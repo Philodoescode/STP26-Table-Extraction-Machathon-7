@@ -15,7 +15,7 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableHeader,
@@ -214,11 +214,24 @@ export default function ExtractPage() {
     if (!hasProcessed || files.length === 0) return;
 
     const zip = new JSZip();
+    const isPdf = files[0].file instanceof File && files[0].file.type === "application/pdf";
     const uploadedFileName = files[0].file instanceof File ? files[0].file.name : files[0].file.name || "document";
     const baseName = uploadedFileName.includes('.') ? uploadedFileName.substring(0, uploadedFileName.lastIndexOf('.')) : uploadedFileName;
 
+    // Group all data across all pages
+    const allGroups: Record<string, typeof tableData> = {};
+    tableData.forEach(row => {
+      if (!allGroups[row.regionId]) allGroups[row.regionId] = [];
+      allGroups[row.regionId].push(row);
+    });
+
+    const regionPageMap = new Map<string, number>();
+    mockDetections.forEach(det => {
+      if (det.page) regionPageMap.set(det.id, det.page);
+    });
+
     let tableNo = 1;
-    for (const [, rows] of Object.entries(groupedData)) {
+    for (const [regionId, rows] of Object.entries(allGroups)) {
       const header = "ID,Name,Amount,Status\n";
       const csvRows = rows.map(row => {
         const escapeCell = (val: string) => {
@@ -231,7 +244,14 @@ export default function ExtractPage() {
       });
       const csvContent = header + csvRows.join("\n");
       
-      zip.file(`${baseName}_table_${tableNo}.csv`, csvContent);
+      const page = regionPageMap.get(regionId) || 1;
+      let filePath = `${baseName}_table_${tableNo}.csv`;
+      
+      if (isPdf) {
+        filePath = `page_${page}/${filePath}`;
+      }
+      
+      zip.file(filePath, csvContent);
       tableNo++;
     }
 
@@ -286,7 +306,7 @@ export default function ExtractPage() {
     }
   }, [zoomedRegion, previewUrl]);
 
-  return (
+    return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       {/* Zoom Modal */}
       {zoomedRegion && (
@@ -343,7 +363,7 @@ export default function ExtractPage() {
             disabled={isProcessing || files.length === 0}
             className="bg-primary hover:bg-primary/90 text-primary-foreground min-w-[100px]"
           >
-            {isProcessing ? `Running... ${progress}%` : "Run"}
+            Run
           </Button>
           <Button
             disabled={!hasProcessed}
@@ -562,33 +582,15 @@ export default function ExtractPage() {
                     </p>
                   </div>
                 ) : isProcessing ? (
-                  <div className="space-y-8 max-w-4xl mx-auto w-full pt-10">
-                    <div className="space-y-3">
+                  <div className="h-full flex flex-col items-center justify-center p-10">
+                    <div className="w-full max-w-md space-y-4">
                       <div className="flex justify-between text-sm font-medium">
                         <span className="text-foreground animate-pulse">
                           Analyzing Document Structure ({extractionMode} mode)...
                         </span>
                         <span className="text-primary font-mono">{progress}%</span>
                       </div>
-                      <div className="h-2 w-full bg-muted overflow-hidden rounded-full border border-border/50">
-                        <div
-                          className="h-full bg-primary transition-all duration-300 ease-out"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="border border-border rounded-xl bg-background/50 p-6 space-y-6">
-                      <div className="flex items-center gap-4">
-                        <Skeleton className="h-10 w-32" />
-                        <Skeleton className="h-10 w-24" />
-                      </div>
-                      <div className="space-y-3">
-                        <Skeleton className="h-12 w-full" />
-                        <Skeleton className="h-12 w-full" />
-                        <Skeleton className="h-12 w-full" />
-                        <Skeleton className="h-12 w-full" />
-                      </div>
+                      <Progress value={progress} className="h-2" />
                     </div>
                   </div>
                 ) : (

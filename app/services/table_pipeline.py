@@ -8,11 +8,7 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import re
-import shutil
-import subprocess
-import sys
 import threading
 import time
 import uuid
@@ -202,69 +198,19 @@ def _detect_and_crop(
 
 
 # ---------------------------------------------------------------------------
-# Step 3: TDATR inference (subprocess)
+# Step 3: TDATR inference (in-process singleton)
 # ---------------------------------------------------------------------------
 
-def _run_tdatr(job_dir: Path, crops_dir: Path) -> Path:
-    settings = get_settings()
-    repo = Path(settings.tdatr_repo_dir)
-    pkg = repo / "TDATR"
-    eval_dir = pkg / "eval"
-    cfg_dir = repo / "configs"
-    runner = Path(__file__).resolve().with_name("tdatr_infer_runner.py")
+def _run_tdatr(job_dir: Path, crops_dir: Path) -> list[dict]:
+    """Run TDATR structure recognition using the persistent in-process model.
 
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join([
-        str(repo), str(pkg), str(eval_dir),
-        env.get("PYTHONPATH", ""),
-    ])
-    env["HYDRA_FULL_ERROR"] = "1"
+    Returns a list of per-image result dicts (no filesystem round-trip).
+    Visualization images and JSON are still saved under ``job_dir/output/``.
+    """
+    from app.services.tdatr_predictor import _get_tdatr_predictor
 
-    cmd = [
-        sys.executable,
-        str(runner),
-        str(eval_dir / "infer.py"),
-        "--config-dir", str(cfg_dir),
-        "--config-name", "config",
-        f"common.user_dir={pkg}",
-        "common.npu=true",
-        "common.npu_jit_compile=false",
-        "+model.rectification_rotate_flag=false",
-        "+model.rectification_textline_height_flag=false",
-        "task.use_ocr_plug=false",
-        "model.use_naiive=true",
-        "model.cross_flash_attn=false",
-        "model.lora.apply_lora=false",
-        "+model.use_vit_encoder=false",
-        "+model.use_donut_encoder=true",
-        "+model.use_cfgi=true",
-        f"model.ckpt={settings.tdatr_checkpoint_path}",
-        f"generation.no_repeat_ngram_size={settings.tdatr_no_repeat_ngram_size}",
-        f"generation.min_len={settings.tdatr_min_len}",
-        f"generation.max_len={settings.tdatr_max_len}",
-        f"generation.temperature={settings.tdatr_temperature}",
-        f"task.seed={settings.tdatr_seed}",
-        f"generation.table_crops_dir={crops_dir}",
-    ]
-
-    subprocess.run(cmd, cwd=str(job_dir), env=env, check=True)
-
-    # Primary output path
-    out_json_dir = job_dir / "output" / "infer_TDATR" / crops_dir.name / "out_jsons"
-
-    # Hydra may place output under timestamped subdir
-    if not out_json_dir.exists():
-        hydra_root = job_dir / "outputs"
-        if hydra_root.exists():
-            candidates = sorted(
-                hydra_root.glob(f"*/*/output/infer_TDATR/{crops_dir.name}/out_jsons"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )
-            if candidates:
-                out_json_dir = candidates[0]
-
-    return out_json_dir
+    predictor = _get_tdatr_predictor()
+    return predictor.infer(crops_dir, output_base_dir=job_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +226,19 @@ def _clean_text(text: str) -> str:
 
 
 def _parse_tdatr_output(
-    out_json_dir: Path,
+    tdatr_results: list[dict],
     detections_by_stem: dict[str, list[dict]],
 ) -> list[dict]:
+    """Convert in-memory TDATR result dicts to the normalized format
+    expected by ``_store_results``.
+
+    ``tdatr_results`` is the list returned by ``TDATRPredictor.infer()``.
+    Each entry has an ``image_path`` and a ``tables`` list.
+    """
     results: list[dict] = []
 
-    for jf in sorted(out_json_dir.glob("*.json")):
-        payload = json.loads(jf.read_text(encoding="utf-8"))
-        stem = Path(payload.get("image_path", jf.stem)).stem
+    for payload in tdatr_results:
+        stem = Path(payload.get("image_path", "")).stem
         surya = detections_by_stem.get(stem, [])
 
         for table in sorted(payload.get("tables", []), key=lambda t: int(t.get("table_index", 0))):
@@ -400,14 +351,14 @@ def process_document(job_id: str, file_path: str) -> None:
 
         _upd(stage="structure_recognition", progress=40)
 
-        # Step 3 – TDATR
-        out_json_dir = _run_tdatr(jdir, crops_dir)
-        _log(f"[{job_id}] TDATR done, parsing {out_json_dir}")
+        # Step 3 – TDATR (in-process)
+        tdatr_results = _run_tdatr(jdir, crops_dir)
+        _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
 
         _upd(stage="storing", progress=80)
 
         # Step 4 – parse
-        table_results = _parse_tdatr_output(out_json_dir, detections)
+        table_results = _parse_tdatr_output(tdatr_results, detections)
 
         # Step 5 – persist
         _store_results(job_id, table_results, crops_dir)

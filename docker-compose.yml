@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
   api:
@@ -11,9 +11,9 @@ services:
       # Persisted job files (uploads, crops, CSVs, SQLite DB)
       - ./storage:/app/storage
 
-      # TDATR model repository (read-only mount from host/WSL)
-      # Set HOST_TDATR_REPO_DIR in .env to the absolute path of /home/yousif/TDATR
-      - ${HOST_TDATR_REPO_DIR}:/tdatr_repo:ro
+      # Live-mount source code (no rebuild needed for Python changes)
+      - ./app:/app/app
+      # TDATR code is now baked into the image (no volume mount needed)
 
       # TDATR model checkpoint (single .pt file, read-only)
       # Set HOST_TDATR_CHECKPOINT in .env to the absolute path of the model.pt file
@@ -28,8 +28,8 @@ services:
       - STORAGE_PATH=/app/storage
       - DATABASE_PATH=/app/storage/jobs.db
 
-      # Model paths (inside container — mapped via volumes above)
-      - TDATR_REPO_DIR=/tdatr_repo
+      # Model paths (inside container — checkpoint + surya mapped via volumes)
+      - TDATR_REPO_DIR=/app/TDATR
       - TDATR_CHECKPOINT_PATH=/models/model.pt
       - SURYA_LAYOUT_MODEL_DIR=/models/surya_layout
 
@@ -50,10 +50,10 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

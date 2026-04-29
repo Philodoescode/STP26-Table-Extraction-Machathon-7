@@ -227,10 +227,7 @@ export default function ExtractPage() {
         </section>
       </main>
 
-      <ExtractFooter 
-        isProcessing={isProcessing}
-        hasProcessed={hasProcessed}
-      />
+      <ExtractFooter />
     </div>
   );
 }

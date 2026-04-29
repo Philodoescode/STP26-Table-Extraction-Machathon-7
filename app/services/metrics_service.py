@@ -62,7 +62,7 @@ def _gpu_info() -> dict:
 
         # Memory stats from torch
         mem_alloc = torch.cuda.memory_allocated(0)
-        mem_total = torch.cuda.get_device_properties(0).total_mem
+        mem_total = torch.cuda.get_device_properties(0).total_memory
         info["gpu_memory_used_mb"] = round(mem_alloc / (1024 * 1024), 1)
         info["gpu_memory_total_mb"] = round(mem_total / (1024 * 1024), 1)
 

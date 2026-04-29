@@ -322,19 +322,39 @@ class TDATRPredictor:
                 table_index = detection.get("table_index", table_idx)
                 crop_size = detection.get("crop_size")
 
-                raw_answer, clear_answer, cell_boxes_pred, cell_span_html, cell_texts, cell_confidences = (
-                    self._run_tsr_on_table(
-                        model=self._model,
-                        tokenizer=self._tokenizer,
-                        dataset=self._dataset,
-                        device=self._device,
-                        eos_token=self._eos_token,
-                        image_input=crop_image,
-                        image_info_path=image_path,
-                        DetDataSample=self._DetDataSample,
-                        InstanceData=self._InstanceData,
-                    )
+                tsr_output = self._run_tsr_on_table(
+                    model=self._model,
+                    tokenizer=self._tokenizer,
+                    dataset=self._dataset,
+                    device=self._device,
+                    eos_token=self._eos_token,
+                    image_input=crop_image,
+                    image_info_path=image_path,
+                    DetDataSample=self._DetDataSample,
+                    InstanceData=self._InstanceData,
                 )
+
+                # Backward compatibility:
+                # - old TDATR infer returns 5 values (no cell_confidences)
+                # - new TDATR infer returns 6 values (with cell_confidences)
+                if len(tsr_output) == 6:
+                    (
+                        raw_answer,
+                        clear_answer,
+                        cell_boxes_pred,
+                        cell_span_html,
+                        cell_texts,
+                        cell_confidences,
+                    ) = tsr_output
+                else:
+                    (
+                        raw_answer,
+                        clear_answer,
+                        cell_boxes_pred,
+                        cell_span_html,
+                        cell_texts,
+                    ) = tsr_output
+                    cell_confidences = None
 
                 if x1 is None:
                     cell_boxes_output = cell_boxes_pred

@@ -257,26 +257,26 @@ def _parse_tdatr_output(
         for table in sorted(payload.get("tables", []), key=lambda t: int(t.get("table_index", 0))):
             tidx = int(table.get("table_index", 0))
             cells: list[dict] = []
-            # Track columns occupied by rowspans: col_index -> remaining rows
+            # Track columns occupied by active rowspans.
+            # Value is number of rows left including the current row.
             occupied: dict[int, int] = {}
             for row_idx, row in enumerate(table.get("answer", {}).get("cells", [])):
                 if not isinstance(row, list):
                     continue
-                # Decrement occupancies; drop expired ones
-                occupied = {col: rem - 1 for col, rem in occupied.items() if rem > 1}
                 col_ptr = 0
                 for cell in row:
                     if not isinstance(cell, dict):
                         continue
                     # Skip columns held by rowspans from earlier rows
-                    while col_ptr in occupied:
+                    while occupied.get(col_ptr, 0) > 0:
                         col_ptr += 1
                     span = cell.get("span_html", [1, 1])
                     rowspan = int(span[0]) if len(span) > 0 else 1
                     colspan = int(span[1]) if len(span) > 1 else 1
                     if rowspan > 1:
                         for c in range(col_ptr, col_ptr + colspan):
-                            occupied[c] = rowspan - 1
+                            # Keep the widest active span if overlapping
+                            occupied[c] = max(occupied.get(c, 0), rowspan)
                     cells.append({
                         "row": int(cell.get("row_id", row_idx)),
                         "col": col_ptr,
@@ -288,6 +288,11 @@ def _parse_tdatr_output(
                         "flagged": False,
                     })
                     col_ptr += colspan
+                # Consume one row from every active rowspan after row placement.
+                for c in list(occupied.keys()):
+                    occupied[c] -= 1
+                    if occupied[c] <= 0:
+                        del occupied[c]
 
             det_conf = surya[tidx]["score"] if tidx < len(surya) else 1.0
             bbox = _norm_bbox(table.get("bbox"))

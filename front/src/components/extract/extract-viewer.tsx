@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { IconLetterXSmall, IconFileUploadFilled, IconFileTypePdf } from '@tabler/icons-react';
+import { IconXFilled , IconFileUploadFilled, IconFileTypePdf } from '@tabler/icons-react';
 import ExtractPaginationBtns from "@/components/extract-pagination-btns";
 import { type Detection, getColor } from "@/lib/extract-utils";
 
@@ -72,7 +72,7 @@ export default function ExtractViewer({
 }: ExtractViewerProps) {
   return (
     <>
-      <div className="p-4 border-b border-border flex items-center justify-between gap-4 shrink-0">
+      <div className="h-14 px-4 border-b border-border flex items-center justify-between gap-4 shrink-0">
         <h2 className="text-sm font-medium text-muted-foreground tracking-wider shrink-0">
           Document Viewer
         </h2>
@@ -243,11 +243,11 @@ export default function ExtractViewer({
                 </button>
                 <button
                   aria-label="Remove file"
-                  className="flex size-8 items-center justify-center rounded-full bg-destructive/90 text-destructive-foreground hover:bg-destructive transition-colors shadow-sm"
+                  className="flex size-8 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
                   onClick={() => removeFile(files[0]?.id)}
                   type="button"
                 >
-                  <IconLetterXSmall aria-hidden="true" className="size-4" />
+                  <IconXFilled  aria-hidden="true" className="size-[1.125rem]" stroke={2} />
                 </button>
                 <input
                   {...getInputProps()}

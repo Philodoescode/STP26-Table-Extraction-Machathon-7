@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import ExtractPage from './pages/Extract'
 import MetricsPage from './pages/Metrics'
 import { Toaster } from "@/components/ui/sonner"
+import { TourProvider } from "@/components/tour"
 
 function Home() {
   const navigate = useNavigate();
@@ -121,11 +122,13 @@ function App() {
         </div>
 
         <div className="relative z-10 h-full w-full">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/extract" element={<ExtractPage />} />
-            <Route path="/metrics" element={<MetricsPage />} />
-          </Routes>
+          <TourProvider>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/extract" element={<ExtractPage />} />
+              <Route path="/metrics" element={<MetricsPage />} />
+            </Routes>
+          </TourProvider>
         </div>
         <Toaster />
       </main>

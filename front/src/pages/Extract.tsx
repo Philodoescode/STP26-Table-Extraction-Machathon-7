@@ -11,6 +11,7 @@ import ExtractViewer from "@/components/extract/extract-viewer";
 import ExtractResults from "@/components/extract/extract-results";
 import ExtractZoomModal from "@/components/extract/extract-zoom-modal";
 import ExtractFooter from "@/components/extract/extract-footer";
+import ExtractTour from "@/components/extract/extract-tour";
 import ExtractTabs from "@/components/extract-tabs";
 import ExtractConfigRadioBtns from "@/components/extract-config-radio-btns";
 import { Switch } from "@/components/ui/switch";
@@ -135,6 +136,7 @@ export default function ExtractPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
+      <ExtractTour />
       {zoomedRegion && (
         <ExtractZoomModal 
           zoomedRegion={zoomedRegion}

@@ -71,6 +71,7 @@ export default function ExtractHeader({
       {showActions && (
         <div className="flex items-center gap-3">
           <Button
+            id="tour-run-button"
             onClick={onRun}
             disabled={isProcessing || !hasFiles}
             className="bg-primary hover:bg-primary/90 text-primary-foreground min-w-[100px]"
@@ -79,6 +80,7 @@ export default function ExtractHeader({
           </Button>
           <div className="relative" ref={exportMenuRef}>
             <Button
+              id="tour-export-button"
               disabled={!hasProcessed}
               variant="outline"
               className="border-border hover:bg-accent hover:text-accent-foreground"

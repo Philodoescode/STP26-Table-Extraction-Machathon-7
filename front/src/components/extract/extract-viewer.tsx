@@ -91,6 +91,7 @@ export default function ExtractViewer({
         <div className="flex flex-col gap-2 flex-1">
           <div className="relative flex-1 min-h-[300px] flex flex-col">
             <div
+              id="tour-upload-area"
               className={cn(
                 "relative flex flex-1 w-full h-full flex-col items-center justify-center overflow-hidden rounded-xl transition-colors",
                 isDragging

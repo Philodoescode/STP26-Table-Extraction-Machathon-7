@@ -23,12 +23,14 @@ export default function ExtractTabs({ activeTab, onTabChange, configContent, res
       <div className="bg-muted/5 border-b border-border">
         <TabsList className="h-auto rounded-none bg-transparent p-0 px-4 w-full justify-start shrink-0">
           <TabsTrigger
+            id="tour-config-tab"
             className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
             value="0"
           >
             Configuration
           </TabsTrigger>
           <TabsTrigger
+            id="tour-results-tab"
             className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
             value="1"
           >

@@ -495,9 +495,9 @@ export function TourAlertDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
 
   return (
     <AlertDialog open={isOpen}>
-      <AlertDialogContent className="max-w-md p-6 light bg-background text-foreground border-border">
+      <AlertDialogContent className="max-w-md p-6 border-border">
         <AlertDialogHeader className="flex flex-col items-center justify-center">
-          <div className="relative mb-4">
+          <div className="relative mb-4 flex justify-center w-full">
             <motion.div
               initial={{ scale: 0.7, filter: "blur(10px)" }}
               animate={{
@@ -522,9 +522,9 @@ export function TourAlertDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
               }}
               className="flex items-center justify-center"
             >
-              <div className="text-6xl font-black tracking-tighter flex gap-1 items-center">
+              <div className="text-6xl font-black tracking-tighter flex items-center justify-center text-center leading-none gap-0.5">
                 <span className="text-primary">T</span>
-                <span className="text-chart-1">S</span>
+                <span className="text-chart-2">S</span>
               </div>
             </motion.div>
           </div>

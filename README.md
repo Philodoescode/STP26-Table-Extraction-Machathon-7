@@ -115,6 +115,9 @@ export MODAL_MAX_CONTAINERS=1
 export MODAL_SCALEDOWN_WINDOW=300
 export MODAL_MAX_INPUTS=32
 export MODAL_TARGET_INPUTS=16
+export CORS_ORIGINS='["http://localhost:5173","http://localhost:3000","https://table-extraction-front.onrender.com"]'
+export CORS_ORIGIN_REGEX='^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-zA-Z0-9-]+\.)*(onrender\.com|vercel\.app|netlify\.app|modal\.run)$'
+# emergency fallback (less strict): export CORS_ALLOW_ALL=true
 
 modal deploy modal_app.py
 ```

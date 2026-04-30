@@ -3,6 +3,7 @@ import DotGrid from '@/components/DotGrid'
 import RotatingText from './components/RotatingText'
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import ExtractPage from './pages/Extract'
+import MetricsPage from './pages/Metrics'
 import { Toaster } from "@/components/ui/sonner"
 
 function Home() {
@@ -123,6 +124,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/extract" element={<ExtractPage />} />
+            <Route path="/metrics" element={<MetricsPage />} />
           </Routes>
         </div>
         <Toaster />

@@ -61,7 +61,7 @@ export default function ExtractPage() {
     processFiles,
     updateCellOverride,
     jobId
-  } = useExtractProcessor(files, () => setActiveTab(1));
+  } = useExtractProcessor(files);
 
   const previewUrl = files[0]?.preview || null;
   const displayUrl = pdfPages.length > 0 ? pdfPages[currentPage - 1] : previewUrl;
@@ -145,6 +145,7 @@ export default function ExtractPage() {
       <ExtractHeader 
         onRun={() => {
           setSelectedRegion(null);
+          setActiveTab(1);
           processFiles();
         }}
         onExport={(format) => handleExportFile(jobId, hasProcessed, files, format)}

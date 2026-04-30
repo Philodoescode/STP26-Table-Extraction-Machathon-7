@@ -63,11 +63,6 @@ models_volume = modal.Volume.from_name(
             "CORS_ORIGINS",
             "[\"http://localhost:5173\",\"http://localhost:3000\",\"https://table-extraction-front.onrender.com\"]",
         ),
-        "CORS_ORIGIN_REGEX": os.getenv(
-            "CORS_ORIGIN_REGEX",
-            r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-zA-Z0-9-]+\.)*(onrender\.com|vercel\.app|netlify\.app|modal\.run)$",
-        ),
-        "CORS_ALLOW_ALL": os.getenv("CORS_ALLOW_ALL", "false"),
     },
 )
 @modal.concurrent(max_inputs=MAX_INPUTS, target_inputs=TARGET_INPUTS)

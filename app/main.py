@@ -1,6 +1,6 @@
+from contextlib import asynccontextmanager
 import logging
 import time
-from contextlib import asynccontextmanager
 
 import torch
 from fastapi import FastAPI
@@ -36,12 +36,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-cors_allow_all = settings.cors_allow_all
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if cors_allow_all else settings.cors_origins,
-    allow_origin_regex=None if cors_allow_all else settings.cors_origin_regex,
-    allow_credentials=not cors_allow_all,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -82,6 +83,18 @@ def _update_job(job_id: str, **kwargs) -> None:
             return
         values.append(job_id)
         conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+
+
+@contextmanager
+def _gpu_slot(semaphore: threading.Semaphore | None):
+    if semaphore is None:
+        yield
+        return
+    semaphore.acquire()
+    try:
+        yield
+    finally:
+        semaphore.release()
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +321,7 @@ def _store_results(job_id: str, table_results: list[dict], crops_dir: Path) -> N
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def process_document(job_id: str, file_path: str) -> None:
+def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None) -> None:
     settings = get_settings()
     storage = Path(settings.storage_path)
     jdir = storage / job_id
@@ -330,30 +343,33 @@ def process_document(job_id: str, file_path: str) -> None:
             page_paths = _load_image(fp, pages_dir)
         _log(f"[{job_id}] rasterized {len(page_paths)} page(s)")
 
-        _upd(stage="detecting", progress=20)
+        _upd(stage="waiting_for_gpu", progress=20)
 
-        # Step 2 – Surya detection + crop
-        crops_dir = jdir / "crops"
-        detections = _detect_and_crop(
-            page_paths, crops_dir,
-            threshold=settings.table_detection_threshold,
-            padding=settings.table_detection_padding,
-        )
-        total_crops = sum(len(v) for v in detections.values())
-        _log(f"[{job_id}] detected {total_crops} table(s)")
+        with _gpu_slot(gpu_semaphore):
+            _upd(stage="detecting", progress=35)
 
-        if total_crops == 0:
-            elapsed = int((time.time() - t0) * 1000)
-            _upd(status="done", stage="done", progress=100,
-                 finished_at=datetime.now(timezone.utc).isoformat(),
-                 latency_ms=elapsed)
-            return
+            # Step 2 – Surya detection + crop
+            crops_dir = jdir / "crops"
+            detections = _detect_and_crop(
+                page_paths, crops_dir,
+                threshold=settings.table_detection_threshold,
+                padding=settings.table_detection_padding,
+            )
+            total_crops = sum(len(v) for v in detections.values())
+            _log(f"[{job_id}] detected {total_crops} table(s)")
 
-        _upd(stage="structure_recognition", progress=40)
+            if total_crops == 0:
+                elapsed = int((time.time() - t0) * 1000)
+                _upd(status="done", stage="done", progress=100,
+                     finished_at=datetime.now(timezone.utc).isoformat(),
+                     latency_ms=elapsed)
+                return
 
-        # Step 3 – TDATR (in-process)
-        tdatr_results = _run_tdatr(jdir, crops_dir)
-        _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+            _upd(stage="structure_recognition", progress=60)
+
+            # Step 3 – TDATR (in-process)
+            tdatr_results = _run_tdatr(jdir, crops_dir)
+            _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
 
         _upd(stage="storing", progress=80)
 

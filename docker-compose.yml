@@ -40,6 +40,9 @@ services:
       - TDATR_MAX_LEN=4096
       - TDATR_TEMPERATURE=0.5
       - MAX_FILE_SIZE_MB=100
+      - JOB_WORKER_COUNT=4
+      - GPU_CONCURRENCY=2
+      - JOB_QUEUE_SIZE=0
 
       # CORS origins for the Vite frontend
       - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]

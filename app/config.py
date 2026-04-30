@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     # Limits
     max_file_size_mb: int = 100
+    job_worker_count: int = 2
+    gpu_concurrency: int = 1
+    job_queue_size: int = 0
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000"]

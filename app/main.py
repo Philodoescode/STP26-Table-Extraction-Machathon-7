@@ -7,16 +7,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import init_db
 from app.routers import health, jobs, metrics, preview, upload
+from app.services.job_queue import start_job_queue, stop_job_queue
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    start_job_queue()
     if torch.cuda.is_available():
         print(f"[startup] GPU: {torch.cuda.get_device_name(0)}", flush=True)
     else:
         print("[startup] No GPU — running on CPU", flush=True)
     yield
+    stop_job_queue()
 
 
 settings = get_settings()

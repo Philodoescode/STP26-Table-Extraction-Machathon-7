@@ -1,5 +1,5 @@
 """
-Service layer for idempotent CSV export with user-override merging.
+Service layer for idempotent export with user-override merging.
 
 Handles the business logic for:
 - POST /api/v1/jobs/{job_id}/export
@@ -11,14 +11,33 @@ import hashlib
 import json
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
 from app.schemas.table import ExportResponse
-from app.services.csv_builder import build_csv
-from app.services.storage_service import job_dir
+from app.services.export_builder import build_csv_export, build_xlsx_export
+from app.services.storage_service import output_export_path
+
+SUPPORTED_EXPORT_FORMATS = {"csv", "xlsx"}
+
+
+def normalize_export_format(export_format: str) -> str:
+    normalized = (export_format or "csv").lower()
+    if normalized == "xslx":
+        normalized = "xlsx"
+    if normalized not in SUPPORTED_EXPORT_FORMATS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": (
+                    f"Unsupported export format '{export_format}'. "
+                    "Supported formats are: csv, xlsx."
+                ),
+                "code": "INVALID_EXPORT_FORMAT",
+            },
+        )
+    return normalized
 
 
 def _get_done_job_or_error(conn: sqlite3.Connection, job_id: str):
@@ -46,7 +65,7 @@ def _merge_tables_with_overrides(
 ) -> list[dict[str, Any]]:
     """
     Load all table_results for a job, overlay any cell_overrides, and
-    return a list of table dicts compatible with ``csv_builder.build_csv``.
+    return a list of table dicts compatible with export builders.
     """
     table_rows = conn.execute(
         "SELECT * FROM table_results WHERE job_id = ? "
@@ -102,38 +121,54 @@ def _compute_data_hash(merged: list[dict[str, Any]]) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
-def export_job(conn: sqlite3.Connection, job_id: str) -> ExportResponse:
+def _build_export_file(
+    job_id: str,
+    merged: list[dict[str, Any]],
+    export_format: str,
+):
+    output_path = output_export_path(job_id, export_format)
+    if export_format == "csv":
+        return build_csv_export(merged, output_path)
+    return build_xlsx_export(merged, output_path)
+
+
+def export_job(
+    conn: sqlite3.Connection,
+    job_id: str,
+    export_format: str = "csv",
+) -> ExportResponse:
     """
-    Build (or return cached) CSV for a completed job.
+    Build (or return cached) export for a completed job.
 
     Merging priority: user overrides > raw OCR data.
     Idempotency: if merged data hash matches the stored export, the
-    existing download URL is returned without regenerating the CSV.
+    existing download URL is returned without regenerating the file.
     """
+    export_format = normalize_export_format(export_format)
     _get_done_job_or_error(conn, job_id)
 
     merged = _merge_tables_with_overrides(conn, job_id)
     data_hash = _compute_data_hash(merged)
+    download_url = f"/api/v1/jobs/{job_id}/{export_format}"
+    output_path = output_export_path(job_id, export_format)
 
     # Check for existing export with matching hash
     existing = conn.execute(
-        "SELECT csv_path, download_url, data_hash FROM exports WHERE job_id = ?",
+        "SELECT data_hash FROM exports WHERE job_id = ?",
         [job_id],
     ).fetchone()
 
     if existing and existing["data_hash"] == data_hash:
-        csv_path = Path(existing["csv_path"])
-        if csv_path.exists():
+        if output_path.exists():
             return ExportResponse(
                 job_id=job_id,
-                download_url=existing["download_url"],
+                download_url=download_url,
                 cached=True,
             )
 
-    # Build new CSV
-    jdir = job_dir(job_id)
+    # Build new export file
     try:
-        csv_path = build_csv(job_id, merged, jdir)
+        output_path = _build_export_file(job_id, merged, export_format)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -143,8 +178,6 @@ def export_job(conn: sqlite3.Connection, job_id: str) -> ExportResponse:
             },
         )
 
-    download_url = f"/api/v1/jobs/{job_id}/csv"
-
     # Upsert export record
     conn.execute(
         """
@@ -152,7 +185,7 @@ def export_job(conn: sqlite3.Connection, job_id: str) -> ExportResponse:
             (job_id, csv_path, data_hash, created_at, download_url)
         VALUES (?, ?, ?, ?, ?)
         """,
-        [job_id, str(csv_path), data_hash,
+        [job_id, str(output_path), data_hash,
          datetime.now(timezone.utc).isoformat(), download_url],
     )
 

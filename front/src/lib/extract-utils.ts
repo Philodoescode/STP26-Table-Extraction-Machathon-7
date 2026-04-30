@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, type ExportFormat } from "./api";
 
 export interface Detection {
   id: string;
@@ -54,25 +54,23 @@ export const getColor = (confidence: number) => {
   return { stroke: '#ef4444', fill: 'rgba(239, 68, 68, 0.1)', hoverFill: 'rgba(239, 68, 68, 0.25)' };
 };
 
-export const handleExportCSV = async (
+export const handleExportFile = async (
   jobId: string | null,
   hasProcessed: boolean,
   files: any[],
+  format: ExportFormat = "csv",
   baseFileName: string = "document"
 ) => {
   if (!hasProcessed || files.length === 0 || !jobId) return;
 
   try {
-    const exportRes = await api.exportJob(jobId);
+    const exportRes = await api.exportJob(jobId, format);
     
     // Create download link from the backend's download URL
     const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
-    // We need to construct the full URL. The backend returns something like "/api/v1/jobs/123/csv"
-    // So we can strip the "/api/v1" part from baseUrl if download_url already includes it, or better just fetch it
-    
-    // The safest way is to fetch the blob so we can control the filename
+    // Fetch as blob so the UI can control the final filename.
     const res = await fetch(`${baseUrl.replace(/\/api\/v1\/?$/, '')}${exportRes.download_url}`);
-    if (!res.ok) throw new Error("Failed to download CSV");
+    if (!res.ok) throw new Error(`Failed to download ${format.toUpperCase()}`);
     
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -85,7 +83,7 @@ export const handleExportCSV = async (
       ? uploadedFileName.substring(0, uploadedFileName.lastIndexOf('.')) 
       : uploadedFileName;
       
-    a.download = `tables_${baseName}.csv`;
+    a.download = `tables_${baseName}.${format}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

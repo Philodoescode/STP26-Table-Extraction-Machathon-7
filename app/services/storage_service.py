@@ -22,6 +22,21 @@ def output_csv_path(job_id: str) -> Path:
     return job_dir(job_id) / "output.csv"
 
 
+def output_xlsx_path(job_id: str) -> Path:
+    return job_dir(job_id) / "output.xlsx"
+
+
+def output_export_path(job_id: str, export_format: str) -> Path:
+    normalized = export_format.lower()
+    if normalized == "xslx":
+        normalized = "xlsx"
+    if normalized == "csv":
+        return output_csv_path(job_id)
+    if normalized == "xlsx":
+        return output_xlsx_path(job_id)
+    raise ValueError(f"Unsupported export format: {export_format}")
+
+
 async def save_upload(file: UploadFile, job_id: str) -> Path:
     settings = get_settings()
     max_bytes = settings.max_file_size_mb * 1024 * 1024

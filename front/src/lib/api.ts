@@ -52,6 +52,8 @@ export interface ExportResponse {
   cached: boolean;
 }
 
+export type ExportFormat = "csv" | "xlsx";
+
 export interface MetricsSnapshot {
   total_jobs: number;
   success_count: number;
@@ -97,10 +99,13 @@ export const api = {
     return res.json();
   },
 
-  async exportJob(jobId: string): Promise<ExportResponse> {
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/export`, {
-      method: "POST",
-    });
+  async exportJob(jobId: string, format: ExportFormat = "csv"): Promise<ExportResponse> {
+    const res = await fetch(
+      `${API_BASE_URL}/jobs/${jobId}/export?format=${encodeURIComponent(format)}`,
+      {
+        method: "POST",
+      }
+    );
     if (!res.ok) throw new Error("Failed to export job");
     return res.json();
   },

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 import filetype
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, Form
 
 from app.database import get_db
 from app.services.storage_service import ALLOWED_MIMES, new_job_id, save_upload
@@ -13,7 +13,11 @@ _MAX_HEADER = 16  # bytes to read for magic-byte check
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
+async def upload_file(
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    mode: str = Form("accurate")
+):
     # --- magic-byte validation ---
     header = await file.read(_MAX_HEADER)
     await file.seek(0)
@@ -46,6 +50,6 @@ async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
         )
 
     # --- enqueue background task ---
-    background_tasks.add_task(run_process_document, job_id, str(saved_path))
+    background_tasks.add_task(run_process_document, job_id, str(saved_path), mode)
 
     return {"job_id": job_id, "status": "pending"}

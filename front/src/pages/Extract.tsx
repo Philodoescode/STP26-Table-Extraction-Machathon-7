@@ -145,7 +145,7 @@ export default function ExtractPage() {
       <ExtractHeader 
         onRun={() => {
           setSelectedRegion(null);
-          processFiles();
+          processFiles(extractionMode);
         }}
         onExport={() => handleExportCSV(jobId, hasProcessed, files)}
         isProcessing={isProcessing}

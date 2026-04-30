@@ -5,7 +5,6 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import { usePdfRasterizer } from "@/hooks/use-pdf-rasterizer";
 import { useExtractProcessor } from "@/hooks/use-extract-processor";
 import { handleExportFile, type Detection } from "@/lib/extract-utils";
-import type { ExportFormat } from "@/lib/api";
 
 import ExtractHeader from "@/components/extract/extract-header";
 import ExtractViewer from "@/components/extract/extract-viewer";
@@ -21,7 +20,6 @@ export default function ExtractPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [extractionMode, setExtractionMode] = useState<"fast" | "accurate">("fast");
   const [showConfidence, setShowConfidence] = useState(true);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
   
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
@@ -149,9 +147,7 @@ export default function ExtractPage() {
           setSelectedRegion(null);
           processFiles();
         }}
-        onExport={() => handleExportFile(jobId, hasProcessed, files, exportFormat)}
-        exportFormat={exportFormat}
-        onExportFormatChange={setExportFormat}
+        onExport={(format) => handleExportFile(jobId, hasProcessed, files, format)}
         isProcessing={isProcessing}
         hasProcessed={hasProcessed}
         hasFiles={files.length > 0}

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -12,9 +13,7 @@ import type { ExportFormat } from "@/lib/api";
 
 interface ExtractHeaderProps {
   onRun: () => void;
-  onExport: () => void;
-  exportFormat: ExportFormat;
-  onExportFormatChange: (format: ExportFormat) => void;
+  onExport: (format: ExportFormat) => void;
   isProcessing: boolean;
   hasProcessed: boolean;
   hasFiles: boolean;
@@ -23,13 +22,26 @@ interface ExtractHeaderProps {
 export default function ExtractHeader({
   onRun,
   onExport,
-  exportFormat,
-  onExportFormatChange,
   isProcessing,
   hasProcessed,
   hasFiles
 }: ExtractHeaderProps) {
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const formats: ExportFormat[] = ["csv", "xlsx"];
+
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isExportMenuOpen]);
 
   return (
     <header className="flex-none h-16 border-b border-border flex items-center justify-between px-6 bg-card/30">
@@ -52,33 +64,39 @@ export default function ExtractHeader({
         >
           Run
         </Button>
-        <div className="flex items-center rounded-md border border-input bg-background p-0.5">
-          {formats.map((format) => (
-            <button
-              key={format}
-              type="button"
-              disabled={!hasProcessed}
-              aria-pressed={exportFormat === format}
-              onClick={() => onExportFormatChange(format)}
-              className={cn(
-                "rounded-sm px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition-colors",
-                exportFormat === format
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              {format}
-            </button>
-          ))}
+        <div className="relative" ref={exportMenuRef}>
+          <Button
+            disabled={!hasProcessed}
+            variant="outline"
+            className="border-border hover:bg-accent hover:text-accent-foreground"
+            onClick={() => setIsExportMenuOpen((prev) => !prev)}
+          >
+            Export
+          </Button>
+          <div
+            className={cn(
+              "absolute right-0 top-[calc(100%+0.5rem)] z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 shadow-md transition-all",
+              isExportMenuOpen
+                ? "pointer-events-auto opacity-100 translate-y-0"
+                : "pointer-events-none opacity-0 -translate-y-1"
+            )}
+          >
+            {formats.map((format) => (
+              <button
+                key={format}
+                type="button"
+                disabled={!hasProcessed}
+                onClick={() => {
+                  onExport(format);
+                  setIsExportMenuOpen(false);
+                }}
+                className="w-full rounded-sm px-3 py-2 text-left text-sm uppercase tracking-wide text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                Export {format}
+              </button>
+            ))}
+          </div>
         </div>
-        <Button
-          disabled={!hasProcessed}
-          variant="outline"
-          className="border-border hover:bg-accent hover:text-accent-foreground"
-          onClick={onExport}
-        >
-          Export {exportFormat.toUpperCase()}
-        </Button>
       </div>
     </header>
   );

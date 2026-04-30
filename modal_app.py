@@ -14,7 +14,7 @@ import os
 import modal
 
 APP_NAME = os.getenv("MODAL_APP_NAME", "table-extraction-api")
-GPU_TYPE = os.getenv("MODAL_GPU", "A10G")
+GPU_TYPE = os.getenv("MODAL_GPU", "T4")
 MIN_CONTAINERS = int(os.getenv("MODAL_MIN_CONTAINERS", "0"))
 SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "600"))
 

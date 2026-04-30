@@ -111,9 +111,14 @@ export MODAL_GPU=A10G
 export MODAL_MODELS_VOLUME=table-extraction-models
 export MODAL_STORAGE_VOLUME=table-extraction-storage
 export MODAL_MIN_CONTAINERS=0
-export MODAL_SCALEDOWN_WINDOW=600
+export MODAL_MAX_CONTAINERS=1
+export MODAL_SCALEDOWN_WINDOW=300
+export MODAL_MAX_INPUTS=32
+export MODAL_TARGET_INPUTS=16
 
 modal deploy modal_app.py
 ```
 
 After deploy, Modal prints the public endpoint URL. Your API routes remain the same (for example, `/health`, `/api/v1/upload`, `/api/v1/jobs/{job_id}`).
+
+The deployment uses `@modal.concurrent` so each container can handle multiple web requests at once. Keep `MODAL_MAX_CONTAINERS=1` if you want one shared in-container queue/GPU worker pool, and tune request concurrency with `MODAL_MAX_INPUTS` / `MODAL_TARGET_INPUTS`.

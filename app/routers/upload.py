@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 import shutil
 
 import filetype
@@ -6,9 +7,11 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from app.database import get_db
 from app.services.job_queue import JobQueueFullError, get_job_queue
+from app.services.modal_logging import modal_input_label
 from app.services.storage_service import ALLOWED_MIMES, job_dir, new_job_id, save_upload
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
 
 _MAX_HEADER = 16  # bytes to read for magic-byte check
 
@@ -50,6 +53,12 @@ async def upload_file(file: UploadFile):
     try:
         queue_position = get_job_queue().enqueue(job_id, str(saved_path))
     except JobQueueFullError:
+        logger.warning(
+            "%s upload_queue_full job_id=%s filename=%s",
+            modal_input_label(),
+            job_id,
+            file.filename or "upload",
+        )
         with get_db() as conn:
             conn.execute("DELETE FROM jobs WHERE id = ?", [job_id])
         shutil.rmtree(job_dir(job_id), ignore_errors=True)
@@ -58,4 +67,11 @@ async def upload_file(file: UploadFile):
             detail={"detail": "Server queue is full, retry later", "code": "QUEUE_FULL"},
         )
 
+    logger.info(
+        "%s upload_enqueued job_id=%s queue_position=%s filename=%s",
+        modal_input_label(),
+        job_id,
+        queue_position,
+        file.filename or "upload",
+    )
     return {"job_id": job_id, "status": "pending", "queue_position": queue_position}

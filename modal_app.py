@@ -16,7 +16,10 @@ import modal
 APP_NAME = os.getenv("MODAL_APP_NAME", "table-extraction-api")
 GPU_TYPE = os.getenv("MODAL_GPU", "T4")
 MIN_CONTAINERS = int(os.getenv("MODAL_MIN_CONTAINERS", "0"))
-SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "600"))
+MAX_CONTAINERS = int(os.getenv("MODAL_MAX_CONTAINERS", "1"))
+SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "300"))
+MAX_INPUTS = int(os.getenv("MODAL_MAX_INPUTS", "32"))
+TARGET_INPUTS = int(os.getenv("MODAL_TARGET_INPUTS", "16"))
 
 STORAGE_MOUNT = "/app/storage"
 MODELS_MOUNT = "/models"
@@ -43,7 +46,7 @@ models_volume = modal.Volume.from_name(
     gpu=GPU_TYPE,
     timeout=60 * 60,
     startup_timeout=60 * 30,
-    max_containers=1,
+    max_containers=MAX_CONTAINERS,
     min_containers=MIN_CONTAINERS,
     scaledown_window=SCALEDOWN_WINDOW,
     volumes={
@@ -62,6 +65,7 @@ models_volume = modal.Volume.from_name(
         ),
     },
 )
+@modal.concurrent(max_inputs=MAX_INPUTS, target_inputs=TARGET_INPUTS)
 @modal.asgi_app()
 def fastapi_app():
     from app.main import app as api

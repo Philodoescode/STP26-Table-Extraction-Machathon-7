@@ -15,7 +15,7 @@ export default function ExtractFooter() {
           <span className={`relative inline-flex rounded-full size-2 ${error ? "bg-red-500" : "bg-green-500"}`}></span>
         </span>
         <span className="text-foreground/80 font-medium tracking-wide">
-          {error ? "SYSTEM DEGRADED" : "SYSTEM ONLINE"}
+          {error ? "SYSTEM OFFLINE" : "SYSTEM ONLINE"}
         </span>
       </div>
       <div className="w-px h-3 bg-border"></div>

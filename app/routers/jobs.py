@@ -2,12 +2,13 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 
 from app.database import get_db
 from app.schemas.job import JobResponse
 from app.schemas.table import TableResponse
-from app.services.storage_service import output_csv_path
+from app.services.export_service import normalize_export_format
+from app.services.storage_service import output_export_path
 
 router = APIRouter(prefix="/api/v1")
 
@@ -87,9 +88,7 @@ def get_crop(job_id: str, table_id: str):
                         headers={"Content-Disposition": f'inline; filename="{crop.name}"'})
 
 
-# GET /api/v1/jobs/{job_id}/csv
-@router.get("/jobs/{job_id}/csv")
-def download_csv(job_id: str):
+def _download_export(job_id: str, export_format: str):
     with get_db() as conn:
         row = _get_job_or_404(conn, job_id)
         if row["status"] != "done":
@@ -98,12 +97,44 @@ def download_csv(job_id: str):
                 detail={"detail": f"Job is not done yet (status: {row['status']})", "code": "JOB_NOT_DONE"},
             )
 
-    csv_path = output_csv_path(job_id)
-    if not csv_path.exists():
-        raise HTTPException(status_code=404, detail={"detail": "CSV not found", "code": "FILE_MISSING"})
+    normalized_format = normalize_export_format(export_format)
+    export_path = output_export_path(job_id, normalized_format)
+    if not export_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "detail": f"{normalized_format.upper()} not found",
+                "code": "FILE_MISSING",
+            },
+        )
+
+    media_type = (
+        "text/csv"
+        if normalized_format == "csv"
+        else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    filename = f"tables_{job_id}.{normalized_format}"
 
     return FileResponse(
-        str(csv_path),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="tables_{job_id}.csv"'},
+        str(export_path),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# GET /api/v1/jobs/{job_id}/csv
+@router.get("/jobs/{job_id}/csv")
+def download_csv(job_id: str):
+    return _download_export(job_id, "csv")
+
+
+# GET /api/v1/jobs/{job_id}/xlsx
+@router.get("/jobs/{job_id}/xlsx")
+def download_xlsx(job_id: str):
+    return _download_export(job_id, "xlsx")
+
+
+# GET /api/v1/jobs/{job_id}/xslx (typo alias for compatibility)
+@router.get("/jobs/{job_id}/xslx")
+def download_xslx_alias(job_id: str):
+    return _download_export(job_id, "xslx")

@@ -97,7 +97,13 @@ export default function ExtractResults({
 
   return (
     <div className="space-y-6 max-w-full pb-10">
-      {Object.entries(groupedData).map(([regionId, rows]) => {
+      {Object.entries(groupedData)
+        .sort(([idA], [idB]) => {
+          const indexA = currentPageDetections.findIndex(d => d.id === idA);
+          const indexB = currentPageDetections.findIndex(d => d.id === idB);
+          return indexA - indexB;
+        })
+        .map(([regionId, rows]) => {
         const isSelected = selectedRegion === regionId;
         const isHovered = hoveredRegion === regionId;
         const maxColumns = rows.reduce((max, r) => Math.max(max, r.length), 0);

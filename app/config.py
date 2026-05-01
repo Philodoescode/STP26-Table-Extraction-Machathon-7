@@ -6,10 +6,17 @@ class Settings(BaseSettings):
     storage_path: str = "./storage"
     database_path: str = "./storage/jobs.db"
 
-    # TDATR model paths (WSL paths when running under WSL)
+    # TDATR model paths
     tdatr_repo_dir: str = "./TDATR"
-    tdatr_checkpoint_path: str = "C:/Users/afara/Downloads/STP/E2E_model/model-002.pt"
-    surya_layout_model_dir: str = "C:/Users/afara/Downloads/STP/LT_model"
+    tdatr_checkpoint_path: str = "/models/model.pt"
+
+    # Surya model paths
+    surya_layout_model_dir: str = "/models/surya_layout"
+    surya_recognition_model_dir: str = "/models/surya_recognition"
+
+    # TATR model paths
+    tatr_model_name: str = "microsoft/table-transformer-structure-recognition-v1.1-all"
+    tatr_tsr_checkpoint: str = "/models/tatr_tsr.pt"
 
     # Detection config
     table_detection_threshold: float = 0.0
@@ -24,6 +31,9 @@ class Settings(BaseSettings):
 
     # Limits
     max_file_size_mb: int = 100
+    job_worker_count: int = 2
+    gpu_concurrency: int = 1
+    job_queue_size: int = 0
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000"]

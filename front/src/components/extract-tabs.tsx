@@ -20,16 +20,18 @@ export default function ExtractTabs({ activeTab, onTabChange, configContent, res
       onValueChange={(v) => onTabChange(parseInt(v, 10))} 
       className="flex flex-col h-full w-full"
     >
-      <div className="bg-muted/5 border-b border-border">
-        <TabsList className="h-auto rounded-none bg-transparent p-0 px-4 w-full justify-start shrink-0">
+      <div className="h-14 bg-muted/5 border-b border-border flex items-center">
+        <TabsList className="h-full rounded-none bg-transparent p-0 px-4 w-full justify-start shrink-0">
           <TabsTrigger
-            className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
+            id="tour-config-tab"
+            className="relative h-full rounded-none px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
             value="0"
           >
             Configuration
           </TabsTrigger>
           <TabsTrigger
-            className="relative rounded-none py-3 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
+            id="tour-results-tab"
+            className="relative h-full rounded-none px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:bg-primary data-[state=active]:text-primary font-medium transition-colors"
             value="1"
           >
             Results

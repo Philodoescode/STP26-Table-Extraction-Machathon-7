@@ -14,6 +14,8 @@ This service provides a robust API for extracting structured data (CSV/JSON) fro
 
 The TDATR structure recognition engine is integrated as an in-process singleton. The model is loaded into GPU memory on the first request and kept warm for subsequent jobs. This refactor eliminates the significant overhead of model re-initialization (saving ~30s per job compared to subprocess-based implementations).
 
+The API also runs an internal job queue with worker threads, so uploads return immediately and multiple users can submit at once. Jobs are processed asynchronously by workers, and GPU sections are controlled with a semaphore to prevent unsafe overcommit.
+
 ---
 
 ## Getting Started
@@ -34,6 +36,10 @@ cp .env.example .env
 Edit `.env` and set the following variables:
 - `HOST_TDATR_CHECKPOINT`: Absolute path to your TDATR `model.pt`.
 - `HOST_SURYA_MODEL_DIR`: Absolute path to your Surya layout model directory.
+- Optional concurrency knobs:
+  - `JOB_WORKER_COUNT`: Number of parallel background workers (default `2`).
+  - `GPU_CONCURRENCY`: Number of jobs allowed in GPU inference at once (default `1`).
+  - `JOB_QUEUE_SIZE`: Max queued jobs (`0` = unbounded).
 
 ### 2. Run with Docker
 The TDATR code is baked into the image, while large model weights are mounted via volumes for efficiency.
@@ -105,9 +111,14 @@ export MODAL_GPU=A10G
 export MODAL_MODELS_VOLUME=table-extraction-models
 export MODAL_STORAGE_VOLUME=table-extraction-storage
 export MODAL_MIN_CONTAINERS=0
-export MODAL_SCALEDOWN_WINDOW=600
+export MODAL_MAX_CONTAINERS=1
+export MODAL_SCALEDOWN_WINDOW=300
+export MODAL_MAX_INPUTS=32
+export MODAL_TARGET_INPUTS=16
 
 modal deploy modal_app.py
 ```
 
 After deploy, Modal prints the public endpoint URL. Your API routes remain the same (for example, `/health`, `/api/v1/upload`, `/api/v1/jobs/{job_id}`).
+
+The deployment uses `@modal.concurrent` so each container can handle multiple web requests at once. Keep `MODAL_MAX_CONTAINERS=1` if you want one shared in-container queue/GPU worker pool, and tune request concurrency with `MODAL_MAX_INPUTS` / `MODAL_TARGET_INPUTS`.

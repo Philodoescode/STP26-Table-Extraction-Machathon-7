@@ -21,18 +21,27 @@ services:
       - ${HOST_TDATR_CHECKPOINT}:/models/model.pt:ro
 
       # Surya layout model directory (read-only)
-      # Set HOST_SURYA_MODEL_DIR in .env to the absolute path of the checkpoint dir
-      - ${HOST_SURYA_MODEL_DIR}:/models/surya_layout:ro
+      # Set HOST_SURYA_LAYOUT_MODEL_DIR in .env to the absolute path of the checkpoint dir
+      - ${HOST_SURYA_LAYOUT_MODEL_DIR}:/models/surya_layout:ro
+
+      # Surya recognition model directory (read-only)
+      - ${HOST_SURYA_RECOGNITION_MODEL_DIR}:/models/surya_recognition:ro
+
+      # TATR Structure Recognition checkpoint (.pt file)
+      - ${TATR_TSR_CHECKPOINT}:/models/tatr_tsr.pt:ro
 
     environment:
       # Storage (inside container)
       - STORAGE_PATH=/app/storage
       - DATABASE_PATH=/app/storage/jobs.db
 
-      # Model paths (inside container — checkpoint + surya mapped via volumes)
+      # Model paths (inside container)
       - TDATR_REPO_DIR=/app/TDATR
       - TDATR_CHECKPOINT_PATH=/models/model.pt
       - SURYA_LAYOUT_MODEL_DIR=/models/surya_layout
+      - SURYA_RECOGNITION_MODEL_DIR=/models/surya_recognition
+      - TATR_MODEL_NAME=${TATR_MODEL_NAME:-microsoft/table-transformer-structure-recognition-v1.1-all}
+      - TATR_TSR_CHECKPOINT=/models/tatr_tsr.pt
 
       # Tuning knobs (override via .env if needed)
       - TABLE_DETECTION_THRESHOLD=0.0
@@ -40,6 +49,9 @@ services:
       - TDATR_MAX_LEN=4096
       - TDATR_TEMPERATURE=0.5
       - MAX_FILE_SIZE_MB=100
+      - JOB_WORKER_COUNT=4
+      - GPU_CONCURRENCY=2
+      - JOB_QUEUE_SIZE=0
 
       # CORS origins for the Vite frontend
       - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]

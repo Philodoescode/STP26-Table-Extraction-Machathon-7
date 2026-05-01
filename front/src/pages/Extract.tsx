@@ -4,13 +4,14 @@ import { useState, useMemo, useEffect } from "react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { usePdfRasterizer } from "@/hooks/use-pdf-rasterizer";
 import { useExtractProcessor } from "@/hooks/use-extract-processor";
-import { handleExportCSV, type Detection } from "@/lib/extract-utils";
+import { handleExportFile, type Detection } from "@/lib/extract-utils";
 
 import ExtractHeader from "@/components/extract/extract-header";
 import ExtractViewer from "@/components/extract/extract-viewer";
 import ExtractResults from "@/components/extract/extract-results";
 import ExtractZoomModal from "@/components/extract/extract-zoom-modal";
 import ExtractFooter from "@/components/extract/extract-footer";
+import ExtractTour from "@/components/extract/extract-tour";
 import ExtractTabs from "@/components/extract-tabs";
 import ExtractConfigRadioBtns from "@/components/extract-config-radio-btns";
 import { Switch } from "@/components/ui/switch";
@@ -61,7 +62,7 @@ export default function ExtractPage() {
     processFiles,
     updateCellOverride,
     jobId
-  } = useExtractProcessor(files, () => setActiveTab(1));
+  } = useExtractProcessor(files);
 
   const previewUrl = files[0]?.preview || null;
   const displayUrl = pdfPages.length > 0 ? pdfPages[currentPage - 1] : previewUrl;
@@ -135,6 +136,7 @@ export default function ExtractPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
+      <ExtractTour />
       {zoomedRegion && (
         <ExtractZoomModal 
           zoomedRegion={zoomedRegion}
@@ -145,9 +147,10 @@ export default function ExtractPage() {
       <ExtractHeader 
         onRun={() => {
           setSelectedRegion(null);
-          processFiles();
+          setActiveTab(1);
+          processFiles(extractionMode);
         }}
-        onExport={() => handleExportCSV(jobId, hasProcessed, files)}
+        onExport={(format) => handleExportFile(jobId, hasProcessed, files, format)}
         isProcessing={isProcessing}
         hasProcessed={hasProcessed}
         hasFiles={files.length > 0}

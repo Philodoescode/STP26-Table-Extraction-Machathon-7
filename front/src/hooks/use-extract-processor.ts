@@ -24,7 +24,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
     setError(null);
   }, [files]);
 
-  const processFiles = async (onStart?: () => void) => {
+  const processFiles = async (mode: "fast" | "accurate" = "accurate", onStart?: () => void) => {
     if (files.length === 0) return;
 
     if (onStart) onStart();
@@ -42,7 +42,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
         throw new Error("No valid file provided");
       }
 
-      const job = await api.createJob(file);
+      const job = await api.createJob(file, mode);
       setJobId(job.job_id);
 
       let currentJob = job;
@@ -58,7 +58,13 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
 
       setProgress(100);
 
-      const tables = await api.getTables(job.job_id);
+      const tablesRaw = await api.getTables(job.job_id);
+      const tables = [...tablesRaw].sort((a, b) => {
+        if (a.page_num !== b.page_num) return (a.page_num || 0) - (b.page_num || 0);
+        if (a.table_index !== b.table_index) return (a.table_index || 0) - (b.table_index || 0);
+        if (a.bbox && b.bbox && a.bbox.length >= 2 && b.bbox.length >= 2) return a.bbox[1] - b.bbox[1];
+        return 0;
+      });
       
       const newDetections: Detection[] = tables.map((t) => ({
         id: t.id,

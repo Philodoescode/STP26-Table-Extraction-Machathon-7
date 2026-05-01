@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,18 @@ def _update_job(job_id: str, **kwargs) -> None:
             return
         values.append(job_id)
         conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+
+
+@contextmanager
+def _gpu_slot(semaphore: threading.Semaphore | None):
+    if semaphore is None:
+        yield
+        return
+    semaphore.acquire()
+    try:
+        yield
+    finally:
+        semaphore.release()
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +248,18 @@ def _run_tdatr(job_dir: Path, crops_dir: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Step 3.1: TATR inference (fast mode)
+# ---------------------------------------------------------------------------
+
+def _run_tatr(job_dir: Path, crops_dir: Path) -> list[dict]:
+    """Run TATR structure recognition using the persistent in-process model."""
+    from app.services.tatr_predictor import _get_tatr_predictor
+
+    predictor = _get_tatr_predictor()
+    return predictor.infer(crops_dir, output_base_dir=job_dir)
+
+
+# ---------------------------------------------------------------------------
 # Step 4: parse TDATR output → normalized cell dicts
 # ---------------------------------------------------------------------------
 
@@ -272,22 +297,45 @@ def _parse_tdatr_output(
         for table in sorted(payload.get("tables", []), key=lambda t: int(t.get("table_index", 0))):
             tidx = int(table.get("table_index", 0))
             cells: list[dict] = []
+            # Track columns occupied by active rowspans.
+            # Value is number of rows left including the current row.
+            occupied: dict[int, int] = {}
             for row_idx, row in enumerate(table.get("answer", {}).get("cells", [])):
                 if not isinstance(row, list):
                     continue
-                for col_idx, cell in enumerate(row):
+                col_ptr = 0
+                for cell in row:
                     if not isinstance(cell, dict):
                         continue
+                    # Skip columns held by rowspans from earlier rows
+                    while occupied.get(col_ptr, 0) > 0:
+                        col_ptr += 1
+                    span = cell.get("span_html", [1, 1])
+                    rowspan = int(span[0]) if len(span) > 0 else 1
+                    colspan = int(span[1]) if len(span) > 1 else 1
+                    if rowspan > 1:
+                        for c in range(col_ptr, col_ptr + colspan):
+                            # Keep the widest active span if overlapping
+                            occupied[c] = max(occupied.get(c, 0), rowspan)
                     cells.append({
                         "row": int(cell.get("row_id", row_idx)),
-                        "col": col_idx,
+                        "col": col_ptr,
                         "text": _clean_text(str(cell.get("text", ""))),
                         "bbox": _to_rel_bbox(cell.get("box"), pw, ph),
                         "rowspan": 1,
                         "colspan": 1,
+                        "bbox": _norm_bbox(cell.get("box")),
+                        "rowspan": rowspan,
+                        "colspan": colspan,
                         "confidence": float(cell.get("confidence", 1.0)),
                         "flagged": False,
                     })
+                    col_ptr += colspan
+                # Consume one row from every active rowspan after row placement.
+                for c in list(occupied.keys()):
+                    occupied[c] -= 1
+                    if occupied[c] <= 0:
+                        del occupied[c]
 
             det_conf = surya[tidx]["score"] if tidx < len(surya) else 1.0
 
@@ -368,35 +416,42 @@ def process_document(job_id: str, file_path: str) -> None:
             page_paths = _load_image(fp, pages_dir)
         _log(f"[{job_id}] rasterized {len(page_paths)} page(s)")
 
-        _upd(stage="detecting", progress=20)
+        _upd(stage="waiting_for_gpu", progress=20)
 
-        # Step 2 – Surya detection + crop
-        crops_dir = jdir / "crops"
-        detections = _detect_and_crop(
-            page_paths, crops_dir,
-            threshold=settings.table_detection_threshold,
-            padding=settings.table_detection_padding,
-        )
-        total_crops = sum(len(v) for v in detections.values())
-        _log(f"[{job_id}] detected {total_crops} table(s)")
+        with _gpu_slot(gpu_semaphore):
+            _upd(stage="detecting", progress=35)
 
-        if total_crops == 0:
-            elapsed = int((time.time() - t0) * 1000)
-            _upd(status="done", stage="done", progress=100,
-                 finished_at=datetime.now(timezone.utc).isoformat(),
-                 latency_ms=elapsed)
-            return
+            # Step 2 – Surya detection + crop
+            crops_dir = jdir / "crops"
+            detections = _detect_and_crop(
+                page_paths, crops_dir,
+                threshold=settings.table_detection_threshold,
+                padding=settings.table_detection_padding,
+            )
+            total_crops = sum(len(v) for v in detections.values())
+            _log(f"[{job_id}] detected {total_crops} table(s)")
 
-        _upd(stage="structure_recognition", progress=40)
+            if total_crops == 0:
+                elapsed = int((time.time() - t0) * 1000)
+                _upd(status="done", stage="done", progress=100,
+                     finished_at=datetime.now(timezone.utc).isoformat(),
+                     latency_ms=elapsed)
+                return
 
-        # Step 3 – TDATR (in-process)
-        tdatr_results = _run_tdatr(jdir, crops_dir)
-        _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+            _upd(stage="structure_recognition", progress=60)
+
+            # Step 3 – Structure recognition (in-process)
+            if mode == "fast":
+                structure_results = _run_tatr(jdir, crops_dir)
+                _log(f"[{job_id}] TATR (fast) done, {len(structure_results)} result(s)")
+            else:
+                structure_results = _run_tdatr(jdir, crops_dir)
+                _log(f"[{job_id}] TDATR (accurate) done, {len(structure_results)} result(s)")
 
         _upd(stage="storing", progress=80)
 
         # Step 4 – parse
-        table_results = _parse_tdatr_output(tdatr_results, detections)
+        table_results = _parse_tdatr_output(structure_results, detections)
 
         # Step 5 – persist
         _store_results(job_id, table_results, crops_dir)

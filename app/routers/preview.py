@@ -1,12 +1,12 @@
 """
-Routes for table preview, user overrides, and CSV export.
+Routes for table preview, user overrides, and export.
 
 GET  /api/v1/jobs/{job_id}/tables/{table_id}/preview
 PUT  /api/v1/jobs/{job_id}/tables/{table_id}/preview
 POST /api/v1/jobs/{job_id}/export
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.database import get_db
 from app.schemas.table import (
@@ -61,20 +61,23 @@ def update_preview(job_id: str, table_id: str, body: PreviewUpdateRequest):
 @router.post(
     "/jobs/{job_id}/export",
     response_model=ExportResponse,
-    summary="Build or retrieve the final CSV",
+    summary="Build or retrieve the final export file (CSV or XLSX)",
     responses={
         404: {"description": "Job not found"},
         409: {"description": "Job processing not complete"},
         500: {"description": "Export generation failed"},
     },
 )
-def export(job_id: str):
+def export(
+    job_id: str,
+    format: str = Query(default="csv", description="Export format: csv or xlsx"),
+):
     """
-    Trigger the final CSV build, merging raw OCR data with any user
+    Trigger the final export build, merging raw OCR data with any user
     overrides.
 
     **Idempotent**: if the data has not changed since the last export,
     the existing download URL is returned with ``cached: true``.
     """
     with get_db() as conn:
-        return export_job(conn, job_id)
+        return export_job(conn, job_id, export_format=format)

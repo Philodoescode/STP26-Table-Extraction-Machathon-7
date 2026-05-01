@@ -3,7 +3,9 @@ import DotGrid from '@/components/DotGrid'
 import RotatingText from './components/RotatingText'
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import ExtractPage from './pages/Extract'
+import MetricsPage from './pages/Metrics'
 import { Toaster } from "@/components/ui/sonner"
+import { TourProvider } from "@/components/tour"
 
 function Home() {
   const navigate = useNavigate();
@@ -20,10 +22,10 @@ function Home() {
         <div className="max-w-5xl mx-auto flex flex-col items-center justify-center w-full">
           
           <div className="flex flex-col sm:flex-row items-center justify-center flex-wrap gap-x-4 gap-y-3 text-5xl md:text-7xl lg:text-8xl font-medium tracking-tight text-foreground mb-8">
-            <span className="select-none text-white">Precise</span>
+            <span className="select-none text-white">Flawless</span>
             
             <RotatingText
-              texts={['Extraction', 'Parsing', 'Logic']}
+              texts={['Extraction', 'Parsing', 'Tables']}
               mainClassName="font-playwrite px-5 sm:px-8 bg-primary text-primary-foreground overflow-hidden py-1 sm:py-2 justify-center rounded-2xl md:rounded-3xl"
               staggerFrom="last"
               initial={{ y: "100%" }}
@@ -38,7 +40,7 @@ function Home() {
           </div>
 
           <p className="text-base md:text-xl text-gray-400 mb-12 max-w-2xl">
-            High-precision AI designed to interpret complex document structures, transforming unstructured visuals and raw PDFs into organized tabular data effortlessly.
+            Convert PDFs and images into accurate tables instantly.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full sm:w-auto">
@@ -68,28 +70,36 @@ function Home() {
           
           <div className="flex flex-col justify-center text-left">
             <h2 className="text-5xl lg:text-7xl font-medium text-white mb-6 tracking-tight leading-tight">
-              Structured <br/> <span className="text-primary">Intelligence.</span>
+              Data, <br/> <span className="text-primary">Decoded.</span>
             </h2>
             <p className="text-lg lg:text-xl text-gray-400 font-light leading-relaxed max-w-md">
-              We trained our model on millions of highly dense grids, bypassing traditional extraction limits to read semantic relationships exactly like a human would.
+              We abandoned brittle OCR templates. Our engine understands document layout natively, capturing tables accurately regardless of formatting or origin.
             </p>
           </div>
           
-          <div className="flex flex-col justify-center gap-12 text-left">
+          <div className="flex flex-col justify-center gap-8 lg:gap-10 text-left">
             
             <div className="border-l-2 border-primary/40 pl-6 lg:pl-8 py-1">
-              <span className="text-[10px] font-mono text-primary tracking-[0.2em] mb-3 block uppercase">01 / Logical Inference</span>
-              <h3 className="text-xl md:text-2xl font-medium text-white mb-3 tracking-wide">Contextual Grids</h3>
+              <span className="text-[10px] font-mono text-primary tracking-[0.2em] mb-3 block uppercase">01 / Structural Understanding</span>
+              <h3 className="text-xl md:text-2xl font-medium text-white mb-3 tracking-wide">Beyond Lines</h3>
               <p className="text-sm lg:text-base text-gray-400 font-light leading-relaxed">
-                Instead of blindly mapping detected lines, the engine recreates the structural relationships between rows and columns, interpreting blank space perfectly.
+                Our system doesn't just look for borders. It infers columns and rows from layout and spacing, handling borderless tables with ease.
               </p>
             </div>
             
             <div className="border-l-2 border-primary/40 pl-6 lg:pl-8 py-1">
-              <span className="text-[10px] font-mono text-primary tracking-[0.2em] mb-3 block uppercase">02 / Pure Output</span>
-              <h3 className="text-xl md:text-2xl font-medium text-white mb-3 tracking-wide">Lossless Format</h3>
+              <span className="text-[10px] font-mono text-primary tracking-[0.2em] mb-3 block uppercase">02 / Ready to Work</span>
+              <h3 className="text-xl md:text-2xl font-medium text-white mb-3 tracking-wide">Clean Exports</h3>
               <p className="text-sm lg:text-base text-gray-400 font-light leading-relaxed">
-                Spanning headers, merged cells, and completely borderless sections are retained and accurately nested for immediate use in standard workflows.
+                Complex structures like merged cells and multi-line headers are preserved perfectly, ready to be exported to CSV or Excel without manual cleanup.
+              </p>
+            </div>
+            
+            <div className="border-l-2 border-primary/40 pl-6 lg:pl-8 py-1">
+              <span className="text-[10px] font-mono text-primary tracking-[0.2em] mb-3 block uppercase">03 / Built for Scale</span>
+              <h3 className="text-xl md:text-2xl font-medium text-white mb-3 tracking-wide">High Throughput</h3>
+              <p className="text-sm lg:text-base text-gray-400 font-light leading-relaxed">
+                Process massive document backlogs in minutes. Engineered to deliver pinpoint data extraction at true enterprise volume.
               </p>
             </div>
 
@@ -120,10 +130,13 @@ function App() {
         </div>
 
         <div className="relative z-10 h-full w-full">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/extract" element={<ExtractPage />} />
-          </Routes>
+          <TourProvider>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/extract" element={<ExtractPage />} />
+              <Route path="/metrics" element={<MetricsPage />} />
+            </Routes>
+          </TourProvider>
         </div>
         <Toaster />
       </main>

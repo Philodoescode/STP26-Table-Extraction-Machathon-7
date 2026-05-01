@@ -1,19 +1,26 @@
 from datetime import datetime, timezone
+import logging
+import shutil
 
 import filetype
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 
 from app.database import get_db
-from app.services.storage_service import ALLOWED_MIMES, new_job_id, save_upload
-from app.workers.tasks import run_process_document
+from app.services.job_queue import JobQueueFullError, get_job_queue
+from app.services.modal_logging import modal_input_label
+from app.services.storage_service import ALLOWED_MIMES, job_dir, new_job_id, save_upload
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
 
 _MAX_HEADER = 16  # bytes to read for magic-byte check
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
+async def upload_file(
+    file: UploadFile,
+    mode: str = Form("accurate")
+):
     # --- magic-byte validation ---
     header = await file.read(_MAX_HEADER)
     await file.seek(0)
@@ -38,14 +45,36 @@ async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO jobs (id, filename, file_path, status, progress, created_at)
-            VALUES (?, ?, ?, 'pending', 0, ?)
+            INSERT INTO jobs (id, filename, file_path, status, stage, progress, created_at)
+            VALUES (?, ?, ?, 'pending', 'queued', 0, ?)
             """,
             [job_id, file.filename or "upload", str(saved_path),
              datetime.now(timezone.utc).isoformat()],
         )
 
-    # --- enqueue background task ---
-    background_tasks.add_task(run_process_document, job_id, str(saved_path))
+    # --- enqueue in shared worker queue ---
+    try:
+        queue_position = get_job_queue().enqueue(job_id, str(saved_path), mode)
+    except JobQueueFullError:
+        logger.warning(
+            "%s upload_queue_full job_id=%s filename=%s",
+            modal_input_label(),
+            job_id,
+            file.filename or "upload",
+        )
+        with get_db() as conn:
+            conn.execute("DELETE FROM jobs WHERE id = ?", [job_id])
+        shutil.rmtree(job_dir(job_id), ignore_errors=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"detail": "Server queue is full, retry later", "code": "QUEUE_FULL"},
+        )
 
-    return {"job_id": job_id, "status": "pending"}
+    logger.info(
+        "%s upload_enqueued job_id=%s queue_position=%s filename=%s",
+        modal_input_label(),
+        job_id,
+        queue_position,
+        file.filename or "upload",
+    )
+    return {"job_id": job_id, "status": "pending", "queue_position": queue_position}

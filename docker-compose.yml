@@ -73,3 +73,21 @@ services:
       start_period: 90s
 
     restart: unless-stopped
+
+  chatbot:
+    image: table-extraction-api
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./storage:/app/storage
+      - ./Chatbot:/app/Chatbot
+      # Load the main .env file
+      - ./.env:/app/.env:ro
+    environment:
+      - DATABASE_PATH=/app/storage/jobs.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    # Install dependencies on the fly and start the server so we don't have to rebuild the image
+    command: >
+      bash -c "pip install -r /app/Chatbot/requirements.txt && cd /app/Chatbot && uvicorn server:app --host 0.0.0.0 --port 8001"
+    restart: unless-stopped
+

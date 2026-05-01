@@ -16,6 +16,7 @@ import ExtractTabs from "@/components/extract-tabs";
 import ExtractConfigRadioBtns from "@/components/extract-config-radio-btns";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import SmithyAssistant from "@/components/smithy/smithy-assistant";
 
 export default function ExtractPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -231,6 +232,9 @@ export default function ExtractPage() {
       </main>
 
       <ExtractFooter />
+
+      {/* Smithy floating chatbot — appears after table pipeline completes */}
+      <SmithyAssistant hasProcessed={hasProcessed} jobId={jobId} />
     </div>
   );
 }

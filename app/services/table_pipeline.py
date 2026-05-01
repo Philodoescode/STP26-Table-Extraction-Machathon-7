@@ -394,7 +394,7 @@ def _store_results(job_id: str, table_results: list[dict], crops_dir: Path) -> N
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def process_document(job_id: str, file_path: str) -> None:
+def process_document(job_id: str, file_path: str, mode:str = "fast", gpu_semaphore: threading.Semaphore | None = None) -> None:
     settings = get_settings()
     storage = Path(settings.storage_path)
     jdir = storage / job_id

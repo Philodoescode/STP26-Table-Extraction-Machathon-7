@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
@@ -9,9 +10,13 @@ from google.genai import types
 from google.genai.errors import APIError
 
 from knowledge import get_company_knowledge
+from context_builder import get_job_context_markdown
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
+# Try to load .env from the Chatbot directory, or fallback to the root directory
 load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -25,9 +30,9 @@ MAX_MESSAGES = 50          # prevent context overflow
 MAX_CONTENT_LENGTH = 4000  # chars per message
 
 app = FastAPI(
-    title="Company Chatbot API",
-    version="2.0.0",
-    description="Egyptian Arabic customer support chatbot powered by Gemini"
+    title="Smithy Chatbot API",
+    version="3.0.0",
+    description="TableSmith AI assistant powered by Gemini — analyses extracted table data"
 )
 
 # Allow frontend (React, etc.) to call this API
@@ -62,6 +67,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+    job_id: Optional[str] = None  # If provided, table context is injected
 
     @field_validator("messages")
     @classmethod
@@ -79,7 +85,7 @@ class ChatRequest(BaseModel):
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "3.0.0"}
 
 
 @app.get("/health")
@@ -90,14 +96,49 @@ async def health():
 @app.post("/chat")
 async def chat_endpoint(body: ChatRequest):
     try:
-        system_prompt = get_company_knowledge()
-        full_instruction = (
-            f"{system_prompt}\n\n"
-            "Respond only in Egyptian Arabic (Ammiya). "
+        persona = get_company_knowledge()
+
+        # ── Build system instruction ──────────────────────────────────────────
+        system_parts = [persona]
+
+        if body.job_id:
+            table_markdown = get_job_context_markdown(body.job_id)
+            if table_markdown:
+                system_parts.append(
+                    "\n\n---\n\n"
+                    "## Current Job Context\n\n"
+                    "The user has just processed a document. Below are ALL the tables that were "
+                    "extracted from it, formatted as Markdown. Use these as your primary source "
+                    "of truth when answering any question about the data.\n\n"
+                    "Rules for using table context:\n"
+                    "- Answer questions about specific cells, rows, columns, or values directly from the tables.\n"
+                    "- If the user asks to summarize, do so accurately from the data below.\n"
+                    "- If something is unclear or missing from the tables, say so.\n"
+                    "- Do NOT make up values that aren't in the tables.\n\n"
+                    + table_markdown
+                )
+                logger.info(
+                    f"Injected table context for job_id={body.job_id} "
+                    f"({len(table_markdown)} chars)"
+                )
+            else:
+                logger.info(
+                    f"No table context available for job_id={body.job_id} "
+                    "(job not done or not found)"
+                )
+
+        system_parts.append(
+            "\n\nRespond in the EXACT same language and dialect the user writes in. "
+            "If the user writes in English, respond in English. "
+            "If the user writes in Standard Arabic, respond in Standard Arabic. "
+            "If the user writes in Egyptian Arabic (Ammiya), respond in Egyptian Arabic (Ammiya). "
             "Be helpful, concise, and friendly. "
             "If you don't know something, say so politely."
         )
 
+        full_instruction = "".join(system_parts)
+
+        # ── Build message history ─────────────────────────────────────────────
         contents_for_gemini = []
         for msg in body.messages:
             role = "model" if msg.role in ("assistant", "model") else "user"
@@ -111,12 +152,12 @@ async def chat_endpoint(body: ChatRequest):
         logger.info(f"Sending {len(contents_for_gemini)} messages to Gemini")
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",   # ✅ Latest free model
+            model="gemini-2.0-flash",
             contents=contents_for_gemini,
             config=types.GenerateContentConfig(
                 system_instruction=full_instruction,
                 temperature=0.7,
-                max_output_tokens=1024,
+                max_output_tokens=2048,
             )
         )
 
@@ -154,6 +195,8 @@ async def chat_endpoint(body: ChatRequest):
 
     except APIError as e:
         logger.error(f"Gemini API error: {e}")
+        if "429" in str(e) or getattr(e, "code", None) == 429:
+            return {"reply": "We are having some trouble at the moment. Smithy will be back in no time 😊"}
         raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
 
     except Exception as e:

@@ -26,9 +26,44 @@ MODELS_MOUNT = "/models"
 
 app = modal.App(APP_NAME)
 
-image = modal.Image.from_dockerfile(
-    path="Dockerfile",
-    context_dir=".",
+image = (
+    modal.Image.from_registry(
+        "nvidia/cuda:12.8.1-base-ubuntu22.04",
+        add_python="3.12",
+    )
+    .env(
+        {
+            "DEBIAN_FRONTEND": "noninteractive",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUNBUFFERED": "1",
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        }
+    )
+    .apt_install(
+        "git",
+        "curl",
+        "build-essential",
+        "poppler-utils",
+        "tesseract-ocr",
+        "tesseract-ocr-ara",
+        "libgl1-mesa-glx",
+        "libglib2.0-0",
+        "libsm6",
+        "libxext6",
+        "libxrender1",
+    )
+    # Keep fast-changing app code later so dependency layers stay cached.
+    .add_local_file("backend-requirements.txt", remote_path="/tmp/backend-requirements.txt", copy=True)
+    .run_commands(
+        "python -m pip install --upgrade pip==24.0 setuptools==70.2.0 wheel==0.45.1",
+        "python -m pip install --index-url https://download.pytorch.org/whl/cu128 "
+        "torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128",
+        "python -m pip install --no-cache-dir -r /tmp/backend-requirements.txt "
+        "hydra-core==1.3.2 omegaconf==2.3.0 surya-ocr==0.17.1",
+        "mkdir -p /app/storage",
+    )
+    .add_local_dir("app", remote_path="/app/app", copy=True)
+    .add_local_dir("TDATR", remote_path="/app/TDATR", copy=True)
 )
 
 storage_volume = modal.Volume.from_name(

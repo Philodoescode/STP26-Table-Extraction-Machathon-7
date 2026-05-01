@@ -157,15 +157,15 @@ export default function MetricsPage() {
                 
                 {/* Status Column */}
                 <div className="lg:col-span-4 flex items-center gap-5">
-                  <div className={`p-3 rounded-full ${metrics?.gpu_available ? 'bg-primary/10 text-primary' : 'bg-muted/30 text-muted-foreground'}`}>
+                  <div className="p-3 rounded-full bg-primary/10 text-primary">
                     <IconCpu2 className="w-7 h-7" strokeWidth={1.5} />
                   </div>
                   <div>
                     <div className="text-xl font-light mb-0.5">
-                      {metrics?.gpu_available ? 'GPU Acceleration Active' : 'CPU Inference Engine'}
+                      GPU Inference Engine
                     </div>
-                    <div className="text-xs text-muted-foreground font-light max-w-xs truncate" title={metrics?.gpu_name || "Standard processing mode"}>
-                      {metrics?.gpu_name || "Standard general-purpose compute"}
+                    <div className="text-xs text-muted-foreground font-light max-w-xs truncate" title={metrics?.gpu_name || "GPU runtime"}>
+                      {metrics?.gpu_name || "GPU runtime"}
                     </div>
                     <div className="text-xs text-muted-foreground/90 font-light mt-2 space-y-1">
                       <div>
@@ -187,27 +187,25 @@ export default function MetricsPage() {
                 </div>
 
                 {/* Progress Bars Column */}
-                {metrics?.gpu_available && (
-                  <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-24">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-end">
-                        <span className="text-sm font-light text-muted-foreground">GPU Utilization</span>
-                        <span className="text-2xl font-light tabular-nums">{metrics.gpu_utilization_pct?.toFixed(1) || 0}%</span>
-                      </div>
-                      <Progress value={metrics.gpu_utilization_pct || 0} className="h-1 bg-muted/50" />
+                <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-24">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-end">
+                      <span className="text-sm font-light text-muted-foreground">GPU Utilization</span>
+                      <span className="text-2xl font-light tabular-nums">{metrics?.gpu_utilization_pct?.toFixed(1) || 0}%</span>
                     </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-end">
-                        <span className="text-sm font-light text-muted-foreground">VRAM Allocation</span>
-                        <span className="text-xl font-light tabular-nums">
-                          {metrics.gpu_memory_used_mb?.toFixed(0) || 0} <span className="text-muted-foreground text-xs">/ {metrics.gpu_memory_total_mb?.toFixed(0) || 0} MB</span>
-                        </span>
-                      </div>
-                      <Progress value={vramPercentage} className="h-1 bg-muted/50" />
-                    </div>
+                    <Progress value={metrics?.gpu_utilization_pct || 0} className="h-1 bg-muted/50" />
                   </div>
-                )}
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-end">
+                      <span className="text-sm font-light text-muted-foreground">VRAM Allocation</span>
+                      <span className="text-xl font-light tabular-nums">
+                        {metrics?.gpu_memory_used_mb?.toFixed(0) || 0} <span className="text-muted-foreground text-xs">/ {metrics?.gpu_memory_total_mb?.toFixed(0) || 0} MB</span>
+                      </span>
+                    </div>
+                    <Progress value={vramPercentage} className="h-1 bg-muted/50" />
+                  </div>
+                </div>
               </div>
             </div>
 

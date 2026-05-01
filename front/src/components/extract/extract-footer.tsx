@@ -45,24 +45,20 @@ export default function ExtractFooter() {
       </div>
       <div className="w-px h-3 bg-border"></div>
       <div className="flex gap-2 ml-auto">
-        {metrics?.gpu_available ? (
-          <>
-            <span className="opacity-70">GPU Util:</span>
-            <span className="text-foreground min-w-[30px]">
-              {metrics.gpu_utilization_pct !== null && metrics.gpu_utilization_pct !== undefined 
-                ? `${metrics.gpu_utilization_pct.toFixed(1)}%` 
-                : "---"}
-            </span>
-            <span className="opacity-70 ml-2">VRAM:</span>
-            <span className="text-foreground min-w-[30px]">
-              {metrics.gpu_memory_used_mb !== null && metrics.gpu_memory_total_mb !== null 
-                ? `${metrics.gpu_memory_used_mb.toFixed(0)}MB / ${metrics.gpu_memory_total_mb.toFixed(0)}MB`
-                : "---"}
-            </span>
-          </>
-        ) : (
-          <span className="text-foreground min-w-[30px]">CPU Inference</span>
-        )}
+        <span className="opacity-70">GPU Inference:</span>
+        <span className="text-foreground min-w-[30px]">
+          {metrics?.gpu_containers_up ?? 0}
+          {metrics?.gpu_max_containers ? ` / ${metrics.gpu_max_containers}` : ""}
+          {" "}containers up
+        </span>
+        <span className="opacity-70 ml-2">Active:</span>
+        <span className="text-foreground min-w-[30px]">{metrics?.gpu_containers_active ?? 0}</span>
+        <span className="opacity-70 ml-2">GPU Util:</span>
+        <span className="text-foreground min-w-[30px]">
+          {metrics?.gpu_utilization_pct !== null && metrics?.gpu_utilization_pct !== undefined
+            ? `${metrics.gpu_utilization_pct.toFixed(1)}%`
+            : "---"}
+        </span>
       </div>
     </footer>
   );

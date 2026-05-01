@@ -175,45 +175,16 @@ class TableExtractor:
         print("[TableExtractor] Models ready", flush=True)
 
     @modal.method()
-    def process(self, job_id: str, file_bytes: bytes, suffix: str) -> None:
+    def process(self, job_id: str, file_bytes: bytes, suffix: str) -> dict:
         """Write the uploaded file and run the extraction pipeline.
 
         Bytes are passed directly from WebApp so we never depend on cross-container
-        Volume visibility.  This container writes the file to its own mount, then
-        commits after the job finishes so WebApp containers can read the results.
+        Volume visibility. This container writes the file to its own mount, runs
+        inference, and returns normalized table results to the caller.
         """
         from pathlib import Path
-        import time
         from app.config import get_settings
-        from app.database import get_db
-        from app.services.table_pipeline import process_document
-
-        # Sync view and wait until the just-created job row is visible in this container.
-        # Back-to-back uploads can race volume visibility across containers.
-        visible = False
-        for attempt in range(1, 11):
-            try:
-                storage_volume.reload()
-            except Exception as exc:
-                print(
-                    f"[TableExtractor] storage_volume.reload() failed on attempt {attempt} (non-fatal): {exc}",
-                    flush=True,
-                )
-            try:
-                with get_db() as conn:
-                    row = conn.execute("SELECT id FROM jobs WHERE id = ?", [job_id]).fetchone()
-                if row is not None:
-                    visible = True
-                    break
-            except Exception as exc:
-                print(
-                    f"[TableExtractor] job-row probe failed on attempt {attempt} for {job_id}: {exc}",
-                    flush=True,
-                )
-            time.sleep(0.15 * attempt)
-
-        if not visible:
-            raise RuntimeError(f"Job row {job_id} not visible in TableExtractor after reload retries")
+        from app.services.table_pipeline import run_document_pipeline
 
         settings = get_settings()
         file_path = Path(settings.storage_path) / job_id / f"original{suffix}"
@@ -221,7 +192,8 @@ class TableExtractor:
         file_path.write_bytes(file_bytes)
 
         try:
-            process_document(job_id, str(file_path))
+            table_results, latency_ms = run_document_pipeline(job_id, str(file_path))
+            return {"table_results": table_results, "latency_ms": latency_ms}
         finally:
             storage_volume.commit()
 
@@ -233,7 +205,7 @@ class TableExtractor:
 
 @app.cls(
     image=image,
-    timeout=300,
+    timeout=60 * 60,
     max_containers=MAX_WEB_CONTAINERS,
     # Keep one container always warm so uploads get instant responses.
     min_containers=1,

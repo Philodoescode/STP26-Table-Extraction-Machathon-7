@@ -15,7 +15,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from app.config import get_settings
 from app.database import get_db
@@ -343,69 +343,92 @@ def _store_results(job_id: str, table_results: list[dict], crops_dir: Path) -> N
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None) -> None:
+def run_document_pipeline(
+    job_id: str,
+    file_path: str,
+    gpu_semaphore: threading.Semaphore | None = None,
+    progress_cb: Callable[..., None] | None = None,
+) -> tuple[list[dict], int]:
     settings = get_settings()
     storage = Path(settings.storage_path)
     jdir = storage / job_id
     fp = Path(file_path)
     t0 = time.time()
 
+    def _progress(**kw):
+        if progress_cb is not None:
+            progress_cb(**kw)
+
+    _progress(stage="rasterizing", progress=5)
+
+    # Step 1 – rasterize
+    pages_dir = jdir / "pages"
+    if fp.suffix.lower() == ".pdf":
+        page_paths = _rasterize_pdf(fp, pages_dir)
+    else:
+        page_paths = _load_image(fp, pages_dir)
+    _log(f"[{job_id}] rasterized {len(page_paths)} page(s)")
+
+    _progress(stage="waiting_for_gpu", progress=20)
+
+    with _gpu_slot(gpu_semaphore):
+        _progress(stage="detecting", progress=35)
+
+        # Step 2 – Surya detection + crop
+        crops_dir = jdir / "crops"
+        detections = _detect_and_crop(
+            page_paths,
+            crops_dir,
+            threshold=settings.table_detection_threshold,
+            padding=settings.table_detection_padding,
+        )
+        total_crops = sum(len(v) for v in detections.values())
+        _log(f"[{job_id}] detected {total_crops} table(s)")
+
+        if total_crops == 0:
+            elapsed = int((time.time() - t0) * 1000)
+            return [], elapsed
+
+        _progress(stage="structure_recognition", progress=60)
+
+        # Step 3 – TDATR (in-process)
+        tdatr_results = _run_tdatr(jdir, crops_dir)
+        _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+
+    # Step 4 – parse
+    table_results = _parse_tdatr_output(tdatr_results, detections)
+    elapsed = int((time.time() - t0) * 1000)
+    return table_results, elapsed
+
+
+def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None) -> None:
+    settings = get_settings()
+    storage = Path(settings.storage_path)
+    jdir = storage / job_id
+
     def _upd(**kw):
         _update_job(job_id, **kw)
 
     try:
-        _upd(status="processing", stage="rasterizing", progress=5,
+        _upd(status="processing", stage="queued", progress=0,
              started_at=datetime.now(timezone.utc).isoformat())
-
-        # Step 1 – rasterize
-        pages_dir = jdir / "pages"
-        if fp.suffix.lower() == ".pdf":
-            page_paths = _rasterize_pdf(fp, pages_dir)
-        else:
-            page_paths = _load_image(fp, pages_dir)
-        _log(f"[{job_id}] rasterized {len(page_paths)} page(s)")
-
-        _upd(stage="waiting_for_gpu", progress=20)
-
-        with _gpu_slot(gpu_semaphore):
-            _upd(stage="detecting", progress=35)
-
-            # Step 2 – Surya detection + crop
-            crops_dir = jdir / "crops"
-            detections = _detect_and_crop(
-                page_paths, crops_dir,
-                threshold=settings.table_detection_threshold,
-                padding=settings.table_detection_padding,
-            )
-            total_crops = sum(len(v) for v in detections.values())
-            _log(f"[{job_id}] detected {total_crops} table(s)")
-
-            if total_crops == 0:
-                elapsed = int((time.time() - t0) * 1000)
-                _upd(status="done", stage="done", progress=100,
-                     finished_at=datetime.now(timezone.utc).isoformat(),
-                     latency_ms=elapsed)
-                return
-
-            _upd(stage="structure_recognition", progress=60)
-
-            # Step 3 – TDATR (in-process)
-            tdatr_results = _run_tdatr(jdir, crops_dir)
-            _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+        table_results, elapsed = run_document_pipeline(
+            job_id,
+            file_path,
+            gpu_semaphore=gpu_semaphore,
+            progress_cb=_upd,
+        )
 
         _upd(stage="storing", progress=80)
 
-        # Step 4 – parse
-        table_results = _parse_tdatr_output(tdatr_results, detections)
-
-        # Step 5 – persist
+        # Persist
+        crops_dir = jdir / "crops"
         _store_results(job_id, table_results, crops_dir)
 
-        # Step 6 – CSV
+        # CSV
         from app.services.csv_builder import build_csv
         build_csv(job_id, table_results, jdir)
 
-        elapsed = int((time.time() - t0) * 1000)
         _upd(status="done", stage="done", progress=100,
              finished_at=datetime.now(timezone.utc).isoformat(),
              latency_ms=elapsed)

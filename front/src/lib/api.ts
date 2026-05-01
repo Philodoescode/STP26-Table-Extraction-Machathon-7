@@ -11,6 +11,32 @@ export interface JobResponse {
   latency_ms?: number;
 }
 
+export interface CreateJobResponse extends JobResponse {
+  tables?: TableResponse[];
+}
+
+export interface UploadProgressEvent {
+  type: "progress";
+  status: string;
+  stage?: string;
+  progress?: number;
+  job_id?: string;
+  error?: string;
+}
+
+export interface UploadDoneEvent {
+  type: "done";
+  job: CreateJobResponse;
+}
+
+export interface UploadErrorEvent {
+  type: "error";
+  status_code?: number;
+  detail?: ApiErrorDetail;
+}
+
+export type UploadStreamEvent = UploadProgressEvent | UploadDoneEvent | UploadErrorEvent;
+
 export interface TableResponse {
   id: string;
   job_id: string;
@@ -170,10 +196,10 @@ export const api = {
     );
   },
   
-  async createJob(file: File): Promise<JobResponse> {
+  async createJob(file: File): Promise<CreateJobResponse> {
     const formData = new FormData();
     formData.append("file", file);
-    return requestJson<JobResponse>("/upload", {
+    return requestJson<CreateJobResponse>("/upload", {
       method: "POST",
       body: formData,
     });
@@ -185,6 +211,78 @@ export const api = {
 };
 
 export { ApiError };
+
+export async function streamCreateJob(
+  file: File,
+  onEvent: (event: UploadStreamEvent) => void,
+): Promise<CreateJobResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE_URL}/upload/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let detail: ApiErrorDetail | undefined;
+    try {
+      detail = await res.json();
+    } catch {
+      detail = undefined;
+    }
+    throw toApiError(res.status, detail);
+  }
+
+  if (!res.body) {
+    throw new ApiError("Streaming response body is not available", 0, "STREAM_UNAVAILABLE");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalJob: CreateJobResponse | null = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    let sepIndex = buffer.indexOf("\n\n");
+    while (sepIndex !== -1) {
+      const chunk = buffer.slice(0, sepIndex).trim();
+      buffer = buffer.slice(sepIndex + 2);
+      sepIndex = buffer.indexOf("\n\n");
+
+      if (!chunk) continue;
+      const lines = chunk.split("\n");
+      const dataLines = lines
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart());
+      if (dataLines.length === 0) continue;
+
+      let evt: UploadStreamEvent;
+      try {
+        evt = JSON.parse(dataLines.join("\n")) as UploadStreamEvent;
+      } catch {
+        // ignore malformed chunks
+        continue;
+      }
+      onEvent(evt);
+      if (evt.type === "done") {
+        finalJob = evt.job;
+      } else if (evt.type === "error") {
+        throw toApiError(evt.status_code ?? 500, evt.detail);
+      }
+    }
+  }
+
+  if (!finalJob) {
+    throw new ApiError("Streaming upload completed without a final job payload", 0, "STREAM_MISSING_FINAL");
+  }
+
+  return finalJob;
+}
 
 export const transformPreviewTo2DArray = (preview: PreviewResponse): string[][] => {
   return preview.rows.map(row => row.map(cell => cell.text));

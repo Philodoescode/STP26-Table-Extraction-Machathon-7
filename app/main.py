@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     init_db()
 
     if _ON_MODAL:
-        # On Modal, TableExtractor handles GPU processing via .spawn().
+        # On Modal, TableExtractor handles GPU processing via direct RPC.
         # No local thread pool needed; avoid importing torch at web-server startup.
         try:
             import modal

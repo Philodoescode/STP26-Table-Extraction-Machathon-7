@@ -98,8 +98,14 @@ models_volume = modal.Volume.from_name(
         "STORAGE_PATH": STORAGE_MOUNT,
         "DATABASE_PATH": f"{STORAGE_MOUNT}/jobs.db",
         "TDATR_REPO_DIR": "/app/TDATR",
-        "TDATR_CHECKPOINT_PATH": f"{MODELS_MOUNT}/model.pt",
-        "SURYA_LAYOUT_MODEL_DIR": f"{MODELS_MOUNT}/surya_layout",
+        "TDATR_CHECKPOINT_PATH": os.getenv("TDATR_CHECKPOINT_PATH", f"{MODELS_MOUNT}/model.pt"),
+        "SURYA_LAYOUT_MODEL_DIR": os.getenv("SURYA_LAYOUT_MODEL_DIR", f"{MODELS_MOUNT}/surya_layout"),
+        "SURYA_RECOGNITION_MODEL_DIR": os.getenv("SURYA_RECOGNITION_MODEL_DIR", f"{MODELS_MOUNT}/surya_recognition"),
+        "TATR_MODEL_NAME": os.getenv(
+            "TATR_MODEL_NAME",
+            "microsoft/table-transformer-structure-recognition-v1.1-all",
+        ),
+        "TATR_TSR_CHECKPOINT": os.getenv("TATR_TSR_CHECKPOINT", f"{MODELS_MOUNT}/tatr_tsr.pt"),
         "CORS_ORIGINS": os.getenv(
             "CORS_ORIGINS",
             "[\"http://localhost:5173\",\"http://localhost:3000\",\"https://table-extraction-front.onrender.com\"]",

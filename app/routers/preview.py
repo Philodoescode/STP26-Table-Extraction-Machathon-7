@@ -15,7 +15,9 @@ from app.schemas.table import (
     PreviewUpdateRequest,
     PreviewUpdateResponse,
 )
+from app.services.api_retry import run_with_read_retries
 from app.services.export_service import export_job
+from app.services.modal_volume import reload_storage
 from app.services.preview_service import get_table_preview, save_overrides
 
 router = APIRouter(prefix="/api/v1")
@@ -35,8 +37,11 @@ def preview_table(job_id: str, table_id: str):
     If the user has previously submitted overrides, they are merged
     on top of the raw OCR data.
     """
-    with get_db() as conn:
-        return get_table_preview(conn, job_id, table_id)
+    def _read() -> PreviewResponse:
+        with get_db() as conn:
+            return get_table_preview(conn, job_id, table_id)
+
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
 
 
 @router.put(

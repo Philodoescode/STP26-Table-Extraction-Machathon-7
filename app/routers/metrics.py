@@ -9,7 +9,9 @@ from fastapi import APIRouter, Query
 
 from app.database import get_db
 from app.schemas.metrics import MetricsHistoryResponse, MetricsSnapshot
+from app.services.api_retry import run_with_read_retries
 from app.services.metrics_service import get_history, get_snapshot
+from app.services.modal_volume import reload_storage
 
 router = APIRouter(prefix="/api/v1")
 
@@ -28,10 +30,11 @@ def metrics_snapshot():
     - **GPU**: availability, name, utilization, memory
     - **Throughput**: jobs-per-minute rolling window (5 min)
     """
-    from app.services.modal_volume import reload_storage
-    reload_storage()
-    with get_db() as conn:
-        return get_snapshot(conn)
+    def _read() -> MetricsSnapshot:
+        with get_db() as conn:
+            return get_snapshot(conn)
+
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
 
 
 @router.get(
@@ -57,5 +60,8 @@ def metrics_history(
     Each data point contains ``timestamp``, ``latency_ms``,
     ``success_rate``, and ``job_count``.
     """
-    with get_db() as conn:
-        return get_history(conn, window=window, granularity=granularity)
+    def _read() -> MetricsHistoryResponse:
+        with get_db() as conn:
+            return get_history(conn, window=window, granularity=granularity)
+
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage)

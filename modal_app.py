@@ -30,11 +30,15 @@ GPU_ROUTING_MODE = os.getenv("MODAL_GPU_ROUTING_MODE", "pool").lower()
 GPU_SHARDS = max(1, int(os.getenv("MODAL_GPU_SHARDS", "2")))
 STORAGE_VOLUME_NAME = os.getenv("MODAL_STORAGE_VOLUME", "table-extraction-storage")
 MODELS_VOLUME_NAME = os.getenv("MODAL_MODELS_VOLUME", "table-extraction-models")
+# Optional: name of Modal Secret containing GEMINI_API_KEY
+MODAL_GEMINI_SECRET_NAME = os.getenv("MODAL_GEMINI_SECRET_NAME", "").strip()
 
 STORAGE_MOUNT = "/app/storage"
 MODELS_MOUNT = "/models"
 
 app = modal.App(APP_NAME)
+
+_SECRETS = [modal.Secret.from_name(MODAL_GEMINI_SECRET_NAME)] if MODAL_GEMINI_SECRET_NAME else []
 
 # ---------------------------------------------------------------------------
 # Shared container image
@@ -79,12 +83,14 @@ image = (
         "hydra-core==1.3.2",
         "omegaconf==2.3.0",
         "surya-ocr==0.17.1",
+        "google-genai==1.7.0",
         "modal",
         requirements=["backend-requirements.txt"],
     )
     .run_commands("mkdir -p /app/storage")
     # App code last — changes here don't bust the expensive dep layers above.
     .add_local_dir("app", remote_path="/app/app", copy=True)
+    .add_local_dir("Chatbot", remote_path="/app/Chatbot", copy=True)
     .add_local_dir("TDATR", remote_path="/app/TDATR", copy=True)
 )
 
@@ -116,6 +122,8 @@ _COMMON_ENV: dict[str, str] = {
         "microsoft/table-transformer-structure-recognition-v1.1-all",
     ),
     "TATR_TSR_CHECKPOINT": os.getenv("TATR_TSR_CHECKPOINT", f"{MODELS_MOUNT}/tatr_tsr.pt"),
+    # Chatbot model key (Gemini)
+    "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
     # Tells FastAPI app it's running on Modal so it skips the local job queue.
     "DISPATCH_MODE": "modal",
     "MODAL_APP_NAME": APP_NAME,
@@ -146,6 +154,7 @@ _COMMON_ENV: dict[str, str] = {
         MODELS_MOUNT: models_volume.read_only(),
     },
     env=_COMMON_ENV,
+    secrets=_SECRETS,
     # CPU memory snapshot: captures torch + PIL + numpy import state.
     # Model weights are loaded in snap=False (I/O-bound, not helped by snapshot).
     enable_memory_snapshot=True,
@@ -245,6 +254,7 @@ class TableExtractor:
             '["http://localhost:5173","http://localhost:3000","https://table-extraction-front.onrender.com"]',
         ),
     },
+    secrets=_SECRETS,
     enable_memory_snapshot=True,
 )
 @modal.concurrent(max_inputs=50, target_inputs=20)

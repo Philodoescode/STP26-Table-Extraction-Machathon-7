@@ -182,3 +182,7 @@ nul
 
 opencode.json
 /philo-related/
+
+model-related
+model.pt
+datasets

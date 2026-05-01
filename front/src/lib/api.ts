@@ -110,9 +110,10 @@ export const api = {
     return res.json();
   },
   
-  async createJob(file: File): Promise<JobResponse> {
+  async createJob(file: File, mode: string = "accurate"): Promise<JobResponse> {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", mode);
     const res = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
       body: formData,

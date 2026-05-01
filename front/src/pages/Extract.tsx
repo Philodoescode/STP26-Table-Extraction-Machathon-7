@@ -148,7 +148,7 @@ export default function ExtractPage() {
         onRun={() => {
           setSelectedRegion(null);
           setActiveTab(1);
-          processFiles();
+          processFiles(extractionMode);
         }}
         onExport={(format) => handleExportFile(jobId, hasProcessed, files, format)}
         isProcessing={isProcessing}

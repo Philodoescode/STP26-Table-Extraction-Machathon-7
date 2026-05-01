@@ -227,6 +227,18 @@ def _run_tdatr(job_dir: Path, crops_dir: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Step 3.1: TATR inference (fast mode)
+# ---------------------------------------------------------------------------
+
+def _run_tatr(job_dir: Path, crops_dir: Path) -> list[dict]:
+    """Run TATR structure recognition using the persistent in-process model."""
+    from app.services.tatr_predictor import _get_tatr_predictor
+
+    predictor = _get_tatr_predictor()
+    return predictor.infer(crops_dir, output_base_dir=job_dir)
+
+
+# ---------------------------------------------------------------------------
 # Step 4: parse TDATR output → normalized cell dicts
 # ---------------------------------------------------------------------------
 
@@ -341,7 +353,7 @@ def _store_results(job_id: str, table_results: list[dict], crops_dir: Path) -> N
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None) -> None:
+def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None, mode: str = "accurate") -> None:
     settings = get_settings()
     storage = Path(settings.storage_path)
     jdir = storage / job_id
@@ -387,14 +399,18 @@ def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semap
 
             _upd(stage="structure_recognition", progress=60)
 
-            # Step 3 – TDATR (in-process)
-            tdatr_results = _run_tdatr(jdir, crops_dir)
-            _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+            # Step 3 – Structure recognition (in-process)
+            if mode == "fast":
+                structure_results = _run_tatr(jdir, crops_dir)
+                _log(f"[{job_id}] TATR (fast) done, {len(structure_results)} result(s)")
+            else:
+                structure_results = _run_tdatr(jdir, crops_dir)
+                _log(f"[{job_id}] TDATR (accurate) done, {len(structure_results)} result(s)")
 
         _upd(stage="storing", progress=80)
 
         # Step 4 – parse
-        table_results = _parse_tdatr_output(tdatr_results, detections)
+        table_results = _parse_tdatr_output(structure_results, detections)
 
         # Step 5 – persist
         _store_results(job_id, table_results, crops_dir)

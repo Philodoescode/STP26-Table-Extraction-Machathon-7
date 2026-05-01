@@ -3,7 +3,7 @@ import logging
 import shutil
 
 import filetype
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 
 from app.database import get_db
 from app.services.job_queue import JobQueueFullError, get_job_queue
@@ -17,7 +17,10 @@ _MAX_HEADER = 16  # bytes to read for magic-byte check
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile):
+async def upload_file(
+    file: UploadFile,
+    mode: str = Form("accurate")
+):
     # --- magic-byte validation ---
     header = await file.read(_MAX_HEADER)
     await file.seek(0)
@@ -51,7 +54,7 @@ async def upload_file(file: UploadFile):
 
     # --- enqueue in shared worker queue ---
     try:
-        queue_position = get_job_queue().enqueue(job_id, str(saved_path))
+        queue_position = get_job_queue().enqueue(job_id, str(saved_path), mode)
     except JobQueueFullError:
         logger.warning(
             "%s upload_queue_full job_id=%s filename=%s",

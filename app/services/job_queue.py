@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class JobTask:
     job_id: str
     file_path: str
+    mode: str = "accurate"
 
 
 class JobQueueFullError(RuntimeError):
@@ -69,9 +70,9 @@ class JobQueue:
             worker.join(timeout=join_timeout)
         logger.info("Job queue stopped")
 
-    def enqueue(self, job_id: str, file_path: str) -> int:
+    def enqueue(self, job_id: str, file_path: str, mode: str = "accurate") -> int:
         try:
-            self._queue.put_nowait(JobTask(job_id=job_id, file_path=file_path))
+            self._queue.put_nowait(JobTask(job_id=job_id, file_path=file_path, mode=mode))
         except queue.Full as exc:
             raise JobQueueFullError("Job queue is full") from exc
         return self._queue.qsize()
@@ -84,7 +85,7 @@ class JobQueue:
                 continue
 
             try:
-                process_document(task.job_id, task.file_path, gpu_semaphore=self._gpu_slots)
+                process_document(task.job_id, task.file_path, gpu_semaphore=self._gpu_slots, mode=task.mode)
             except Exception:
                 logger.exception("Job %s failed in worker thread", task.job_id)
             finally:

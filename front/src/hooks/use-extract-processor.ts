@@ -24,7 +24,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
     setError(null);
   }, [files]);
 
-  const processFiles = async (onStart?: () => void) => {
+  const processFiles = async (mode: "fast" | "accurate" = "accurate", onStart?: () => void) => {
     if (files.length === 0) return;
 
     if (onStart) onStart();
@@ -42,7 +42,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
         throw new Error("No valid file provided");
       }
 
-      const job = await api.createJob(file);
+      const job = await api.createJob(file, mode);
       setJobId(job.job_id);
 
       let currentJob = job;

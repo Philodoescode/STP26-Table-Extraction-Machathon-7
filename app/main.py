@@ -1,8 +1,8 @@
 from contextlib import asynccontextmanager
 import logging
+import os
 import time
 
-import torch
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,22 +10,40 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import init_db
 from app.routers import health, jobs, metrics, preview, upload
-from app.services.job_queue import start_job_queue, stop_job_queue
 from app.services.modal_logging import modal_input_label
 
 logger = logging.getLogger(__name__)
+
+_ON_MODAL = os.getenv("DISPATCH_MODE") == "modal"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    start_job_queue()
-    if torch.cuda.is_available():
-        print(f"[startup] GPU: {torch.cuda.get_device_name(0)}", flush=True)
+
+    if _ON_MODAL:
+        # On Modal, TableExtractor handles GPU processing via .spawn().
+        # No local thread pool needed; avoid importing torch at web-server startup.
+        try:
+            import modal
+            print(f"[startup] Modal web container — dispatch via {os.getenv('MODAL_APP_NAME')}.TableExtractor", flush=True)
+        except ImportError:
+            pass
     else:
-        print("[startup] No GPU — running on CPU", flush=True)
+        # Local dev: use the in-process thread pool as before.
+        import torch
+        from app.services.job_queue import start_job_queue, stop_job_queue as _stop
+        start_job_queue()
+        if torch.cuda.is_available():
+            print(f"[startup] GPU: {torch.cuda.get_device_name(0)}", flush=True)
+        else:
+            print("[startup] No GPU — running on CPU", flush=True)
+
     yield
-    stop_job_queue()
+
+    if not _ON_MODAL:
+        from app.services.job_queue import stop_job_queue
+        stop_job_queue()
 
 
 settings = get_settings()

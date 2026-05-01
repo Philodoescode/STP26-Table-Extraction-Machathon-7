@@ -38,6 +38,9 @@ def _get_job_or_404(conn, job_id: str):
 # GET /api/v1/jobs/{job_id}
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 def get_job(job_id: str):
+    # Reload so this container sees the latest DB writes from GPU containers.
+    from app.services.modal_volume import reload_storage
+    reload_storage()
     with get_db() as conn:
         row = _get_job_or_404(conn, job_id)
         return _row_to_job(row)

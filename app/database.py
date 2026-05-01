@@ -14,9 +14,12 @@ def _db_path() -> str:
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(_db_path(), check_same_thread=False)
+    # timeout=30: wait up to 30s for the file lock on a shared network volume.
+    conn = sqlite3.connect(_db_path(), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    # busy_timeout lets SQLite retry on SQLITE_BUSY instead of raising immediately.
+    conn.execute("PRAGMA busy_timeout=10000")
     try:
         yield conn
         conn.commit()

@@ -28,6 +28,8 @@ def metrics_snapshot():
     - **GPU**: availability, name, utilization, memory
     - **Throughput**: jobs-per-minute rolling window (5 min)
     """
+    from app.services.modal_volume import reload_storage
+    reload_storage()
     with get_db() as conn:
         return get_snapshot(conn)
 

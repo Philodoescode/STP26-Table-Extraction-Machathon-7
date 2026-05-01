@@ -108,8 +108,14 @@ _COMMON_ENV: dict[str, str] = {
     "STORAGE_PATH": STORAGE_MOUNT,
     "DATABASE_PATH": f"{STORAGE_MOUNT}/jobs.db",
     "TDATR_REPO_DIR": "/app/TDATR",
-    "TDATR_CHECKPOINT_PATH": f"{MODELS_MOUNT}/model.pt",
-    "SURYA_LAYOUT_MODEL_DIR": f"{MODELS_MOUNT}/surya_layout",
+    "TDATR_CHECKPOINT_PATH": os.getenv("TDATR_CHECKPOINT_PATH", f"{MODELS_MOUNT}/model.pt"),
+    "SURYA_LAYOUT_MODEL_DIR": os.getenv("SURYA_LAYOUT_MODEL_DIR", f"{MODELS_MOUNT}/surya_layout"),
+    "SURYA_RECOGNITION_MODEL_DIR": os.getenv("SURYA_RECOGNITION_MODEL_DIR", f"{MODELS_MOUNT}/surya_recognition"),
+    "TATR_MODEL_NAME": os.getenv(
+        "TATR_MODEL_NAME",
+        "microsoft/table-transformer-structure-recognition-v1.1-all",
+    ),
+    "TATR_TSR_CHECKPOINT": os.getenv("TATR_TSR_CHECKPOINT", f"{MODELS_MOUNT}/tatr_tsr.pt"),
     # Tells FastAPI app it's running on Modal so it skips the local job queue.
     "DISPATCH_MODE": "modal",
     "MODAL_APP_NAME": APP_NAME,
@@ -184,10 +190,14 @@ class TableExtractor:
         from app.services.tdatr_predictor import _get_tdatr_predictor
         _get_tdatr_predictor()
 
+        # TATR structure recognition (fast mode)
+        from app.services.tatr_predictor import _get_tatr_predictor
+        _get_tatr_predictor()
+
         print("[TableExtractor] Models ready", flush=True)
 
     @modal.method()
-    def process(self, job_id: str, file_bytes: bytes, suffix: str) -> dict:
+    def process(self, job_id: str, file_bytes: bytes, suffix: str, mode: str = "accurate") -> dict:
         """Write the uploaded file and run the extraction pipeline.
 
         Bytes are passed directly from WebApp so we never depend on cross-container
@@ -205,7 +215,7 @@ class TableExtractor:
         file_path.write_bytes(file_bytes)
 
         try:
-            table_results, latency_ms = run_document_pipeline(job_id, str(file_path))
+            table_results, latency_ms = run_document_pipeline(job_id, str(file_path), mode=mode)
             return {"table_results": table_results, "latency_ms": latency_ms}
         finally:
             storage_volume.commit()

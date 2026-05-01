@@ -61,6 +61,7 @@ def _route_key_for_job(job_id: str) -> str:
 async def run_document_processing(
     job_id: str,
     file_path: str,
+    mode: str = "accurate",
     file_bytes: bytes = b"",
     suffix: str = "",
     progress_cb: Callable[..., None] | None = None,
@@ -71,23 +72,24 @@ async def run_document_processing(
     Locally, runs the same pipeline in-process on a worker thread.
     """
     if os.getenv("DISPATCH_MODE") == "modal":
-        return await _run_modal(job_id, file_bytes, suffix)
-    return await _run_local(job_id, file_path, progress_cb=progress_cb)
+        return await _run_modal(job_id, file_bytes, suffix, mode=mode)
+    return await _run_local(job_id, file_path, mode=mode, progress_cb=progress_cb)
 
 
-async def _run_modal(job_id: str, file_bytes: bytes, suffix: str) -> dict[str, Any]:
+async def _run_modal(job_id: str, file_bytes: bytes, suffix: str, mode: str = "accurate") -> dict[str, Any]:
     import modal
 
     extractor_cls = modal.Cls.from_name(_APP_NAME, "TableExtractor")
     route_key = _route_key_for_job(job_id)
-    payload = await extractor_cls(route_key=route_key).process.remote.aio(job_id, file_bytes, suffix)
+    payload = await extractor_cls(route_key=route_key).process.remote.aio(job_id, file_bytes, suffix, mode)
     table_count = len(payload.get("table_results", [])) if isinstance(payload, dict) else 0
     logger.info(
-        "modal_run_done job_id=%s route_key=%s table_count=%s mode=%s shards=%s",
+        "modal_run_done job_id=%s route_key=%s table_count=%s routing=%s run_mode=%s shards=%s",
         job_id,
         route_key,
         table_count,
         _GPU_ROUTING_MODE,
+        mode,
         _GPU_SHARDS,
     )
     return payload if isinstance(payload, dict) else {}
@@ -96,6 +98,7 @@ async def _run_modal(job_id: str, file_bytes: bytes, suffix: str) -> dict[str, A
 async def _run_local(
     job_id: str,
     file_path: str,
+    mode: str = "accurate",
     progress_cb: Callable[..., None] | None = None,
 ) -> dict[str, Any]:
     from app.services.table_pipeline import run_document_pipeline
@@ -104,7 +107,8 @@ async def _run_local(
         run_document_pipeline,
         job_id,
         file_path,
+        mode=mode,
         progress_cb=progress_cb,
     )
-    logger.info("local_run_done job_id=%s table_count=%s", job_id, len(table_results))
+    logger.info("local_run_done job_id=%s table_count=%s run_mode=%s", job_id, len(table_results), mode)
     return {"table_results": table_results, "latency_ms": latency_ms}

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import aiofiles
 import filetype
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 import json
 
@@ -33,6 +33,7 @@ def _sse_event(payload: dict) -> bytes:
 
 async def _process_upload(
     file: UploadFile,
+    mode: str = "accurate",
     progress_cb=None,
 ) -> dict:
     async def _emit(payload: dict) -> None:
@@ -113,6 +114,7 @@ async def _process_upload(
         })
         payload = await run_document_processing(
             job_id, file_path,
+            mode=mode,
             file_bytes=file_bytes,
             suffix=suffix,
             progress_cb=_local_stage_progress,
@@ -269,12 +271,12 @@ async def _process_upload(
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile):
-    return await _process_upload(file)
+async def upload_file(file: UploadFile, mode: str = Form("accurate")):
+    return await _process_upload(file, mode=mode)
 
 
 @router.post("/upload/stream")
-async def upload_file_stream(file: UploadFile):
+async def upload_file_stream(file: UploadFile, mode: str = Form("accurate")):
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
     async def _progress_cb(payload: dict) -> None:
@@ -282,7 +284,7 @@ async def upload_file_stream(file: UploadFile):
 
     async def _runner() -> None:
         try:
-            result = await _process_upload(file, progress_cb=_progress_cb)
+            result = await _process_upload(file, mode=mode, progress_cb=_progress_cb)
             await queue.put({"type": "done", "job": result})
         except HTTPException as exc:
             await queue.put(

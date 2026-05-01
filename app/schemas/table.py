@@ -14,7 +14,7 @@ class TableResponse(BaseModel):
     job_id: str
     page_num: int
     table_index: int
-    bbox: Optional[list[int]] = None
+    bbox: Optional[list[float]] = None
     detection_confidence: float
     crop_url: str
 
@@ -25,7 +25,7 @@ class CellData(BaseModel):
     row: int
     col: int
     text: str
-    bbox: Optional[list[int]] = None
+    bbox: Optional[list[float]] = None
     rowspan: int = 1
     colspan: int = 1
     confidence: float = 1.0
@@ -41,7 +41,7 @@ class CellPreview(BaseModel):
 
     text: str
     confidence: float = 1.0
-    bbox: Optional[list[int]] = None
+    bbox: Optional[list[float]] = None
 
 
 class PreviewResponse(BaseModel):

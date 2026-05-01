@@ -134,3 +134,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Smithy typing indicator animation */
+@keyframes typing-dot-bounce {
+  0%, 40% { transform: translateY(0); }
+  20%      { transform: translateY(-0.3rem); }
+}

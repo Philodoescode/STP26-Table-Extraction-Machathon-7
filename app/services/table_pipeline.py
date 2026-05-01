@@ -229,7 +229,19 @@ def _run_tdatr(job_dir: Path, crops_dir: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Step 4: parse TDATR output → normalized cell dicts
+# Step 3.1: TATR inference (fast mode)
+# ---------------------------------------------------------------------------
+
+def _run_tatr(job_dir: Path, crops_dir: Path) -> list[dict]:
+    """Run TATR structure recognition using the persistent in-process model."""
+    from app.services.tatr_predictor import _get_tatr_predictor
+
+    predictor = _get_tatr_predictor()
+    return predictor.infer(crops_dir, output_base_dir=job_dir)
+
+
+# ---------------------------------------------------------------------------
+# Step 4: parse structure output → normalized cell dicts
 # ---------------------------------------------------------------------------
 
 _HTML_TAG = re.compile(r"<[^>]+>")
@@ -272,9 +284,14 @@ def _parse_tdatr_output(
                     # Skip columns held by rowspans from earlier rows
                     while occupied.get(col_ptr, 0) > 0:
                         col_ptr += 1
-                    span = cell.get("span_html", [1, 1])
-                    rowspan = int(span[0]) if len(span) > 0 else 1
-                    colspan = int(span[1]) if len(span) > 1 else 1
+                    span = cell.get("span_html")
+                    if isinstance(span, (list, tuple)) and len(span) >= 2:
+                        rowspan = int(span[0]) if len(span) > 0 else 1
+                        colspan = int(span[1]) if len(span) > 1 else 1
+                    else:
+                        # TATR output uses explicit rowspan/colspan fields.
+                        rowspan = int(cell.get("rowspan", 1))
+                        colspan = int(cell.get("colspan", 1))
                     if rowspan > 1:
                         for c in range(col_ptr, col_ptr + colspan):
                             # Keep the widest active span if overlapping
@@ -346,6 +363,7 @@ def _store_results(job_id: str, table_results: list[dict], crops_dir: Path) -> N
 def run_document_pipeline(
     job_id: str,
     file_path: str,
+    mode: str = "accurate",
     gpu_semaphore: threading.Semaphore | None = None,
     progress_cb: Callable[..., None] | None = None,
 ) -> tuple[list[dict], int]:
@@ -391,17 +409,26 @@ def run_document_pipeline(
 
         _progress(stage="structure_recognition", progress=60)
 
-        # Step 3 – TDATR (in-process)
-        tdatr_results = _run_tdatr(jdir, crops_dir)
-        _log(f"[{job_id}] TDATR done, {len(tdatr_results)} result(s)")
+        # Step 3 – structure recognition (in-process)
+        if mode == "fast":
+            structure_results = _run_tatr(jdir, crops_dir)
+            _log(f"[{job_id}] TATR (fast) done, {len(structure_results)} result(s)")
+        else:
+            structure_results = _run_tdatr(jdir, crops_dir)
+            _log(f"[{job_id}] TDATR (accurate) done, {len(structure_results)} result(s)")
 
     # Step 4 – parse
-    table_results = _parse_tdatr_output(tdatr_results, detections)
+    table_results = _parse_tdatr_output(structure_results, detections)
     elapsed = int((time.time() - t0) * 1000)
     return table_results, elapsed
 
 
-def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semaphore | None = None) -> None:
+def process_document(
+    job_id: str,
+    file_path: str,
+    mode: str = "accurate",
+    gpu_semaphore: threading.Semaphore | None = None,
+) -> None:
     settings = get_settings()
     storage = Path(settings.storage_path)
     jdir = storage / job_id
@@ -415,6 +442,7 @@ def process_document(job_id: str, file_path: str, gpu_semaphore: threading.Semap
         table_results, elapsed = run_document_pipeline(
             job_id,
             file_path,
+            mode=mode,
             gpu_semaphore=gpu_semaphore,
             progress_cb=_upd,
         )

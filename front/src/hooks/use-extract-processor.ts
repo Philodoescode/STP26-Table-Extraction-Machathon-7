@@ -30,7 +30,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
     setError(null);
   }, [files]);
 
-  const processFiles = async (onStart?: () => void) => {
+  const processFiles = async (mode: "fast" | "accurate" = "accurate", onStart?: () => void) => {
     if (files.length === 0) return;
 
     if (onStart) onStart();
@@ -48,7 +48,7 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
         throw new Error("No valid file provided");
       }
 
-      const job: CreateJobResponse = await streamCreateJob(file, (evt) => {
+      const job: CreateJobResponse = await streamCreateJob(file, mode, (evt) => {
         if (evt.type === "progress") {
           if (typeof evt.progress === "number") {
             setProgress(Math.max(0, Math.min(100, evt.progress)));

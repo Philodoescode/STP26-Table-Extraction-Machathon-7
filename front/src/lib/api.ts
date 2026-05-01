@@ -206,9 +206,10 @@ export const api = {
     );
   },
   
-  async createJob(file: File): Promise<CreateJobResponse> {
+  async createJob(file: File, mode: "fast" | "accurate" = "accurate"): Promise<CreateJobResponse> {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", mode);
     return requestJson<CreateJobResponse>("/upload", {
       method: "POST",
       body: formData,
@@ -224,10 +225,12 @@ export { ApiError };
 
 export async function streamCreateJob(
   file: File,
+  mode: "fast" | "accurate",
   onEvent: (event: UploadStreamEvent) => void,
 ): Promise<CreateJobResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("mode", mode);
 
   const res = await fetch(`${API_BASE_URL}/upload/stream`, {
     method: "POST",

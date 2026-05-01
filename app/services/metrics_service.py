@@ -8,10 +8,15 @@ Handles the business logic for:
 
 from __future__ import annotations
 
+import json
+import logging
 import math
 import os
 import re
 import sqlite3
+import subprocess
+import sys
+from shutil import which
 from datetime import datetime, timedelta, timezone
 
 from app.schemas.metrics import (
@@ -19,6 +24,8 @@ from app.schemas.metrics import (
     MetricsHistoryResponse,
     MetricsSnapshot,
 )
+
+logger = logging.getLogger(__name__)
 
 # ── Allowed windows / granularities for the history endpoint ─────────────────
 
@@ -29,6 +36,76 @@ _UNIT_MAP = {
     "h": "hours",
     "d": "days",
 }
+
+_METRICS_MODAL_TOKEN_ID = os.getenv(
+    "MODAL_METRICS_TOKEN_ID",
+    "ak-W0NrRmdAmhDpzAdhCcLlSU",
+)
+_METRICS_MODAL_TOKEN_SECRET = os.getenv(
+    "MODAL_METRICS_TOKEN_SECRET",
+    "as-ThPhw7M2Yz8gJg2NzDM0Ij",
+)
+
+
+def _trim_log_text(value: str, max_chars: int = 1200) -> str:
+    value = (value or "").strip()
+    if len(value) <= max_chars:
+        return value
+    return f"{value[:max_chars]}...<trimmed>"
+
+
+def _redact_cmd(cmd: list[str]) -> str:
+    masked = list(cmd)
+    for i, part in enumerate(masked):
+        if part == "--token-secret" and i + 1 < len(masked):
+            masked[i + 1] = "***REDACTED***"
+    return " ".join(masked)
+
+
+def _run_subprocess_logged(cmd: list[str], timeout: int = 8) -> subprocess.CompletedProcess[str]:
+    return _run_subprocess_logged_env(cmd, timeout=timeout, env=None)
+
+
+def _run_subprocess_logged_env(
+    cmd: list[str],
+    timeout: int = 8,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+        env=env,
+    )
+    logger.info(
+        "metrics_subprocess cmd=%s rc=%s stdout=%s stderr=%s",
+        _redact_cmd(cmd),
+        result.returncode,
+        _trim_log_text(result.stdout),
+        _trim_log_text(result.stderr),
+    )
+    return result
+
+
+def _modal_cli_cmd() -> list[str] | None:
+    """Return an executable command prefix for Modal CLI in this container."""
+    modal_bin = which("modal")
+    if modal_bin:
+        return [modal_bin]
+    # Fallback when CLI entrypoint script is missing from PATH but module exists.
+    return [sys.executable, "-m", "modal"]
+
+
+def _modal_cli_env() -> dict[str, str]:
+    """Build subprocess env with Modal auth credentials."""
+    env = dict(os.environ)
+    if _METRICS_MODAL_TOKEN_ID:
+        env["MODAL_TOKEN_ID"] = _METRICS_MODAL_TOKEN_ID
+    if _METRICS_MODAL_TOKEN_SECRET:
+        env["MODAL_TOKEN_SECRET"] = _METRICS_MODAL_TOKEN_SECRET
+    return env
 
 
 def _parse_duration(value: str) -> timedelta:
@@ -81,6 +158,63 @@ def _gpu_info() -> dict:
         pass
 
     return info
+
+
+def _modal_gpu_containers_up() -> int | None:
+    """Get live GPU container count from Modal control-plane container list.
+
+    Uses:
+      modal container list --app-id <id> --json
+
+    We subtract one for the always-on WebApp container.
+    """
+    app_id = os.getenv("MODAL_METRICS_APP_ID", "ap-DsikVzbMtPuiTeEZoXcKc8").strip()
+    if not app_id:
+        return None
+    modal_cmd = _modal_cli_cmd()
+    if not modal_cmd:
+        return None
+
+    try:
+        modal_env = _modal_cli_env()
+
+        result = _run_subprocess_logged_env(
+            [*modal_cmd, "container", "list", "--app-id", app_id, "--json"],
+            timeout=8,
+            env=modal_env,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "modal_container_list_failed app_id=%s token_id=%s",
+                app_id,
+                _METRICS_MODAL_TOKEN_ID,
+            )
+            return None
+
+        payload = json.loads(result.stdout or "[]")
+        if isinstance(payload, list):
+            total_containers = len(payload)
+        elif isinstance(payload, dict):
+            # Defensive shape handling in case CLI output changes.
+            for key in ("containers", "items", "data"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    total_containers = len(value)
+                    break
+            else:
+                return None
+        else:
+            return None
+        logger.info(
+            "modal_container_count app_id=%s total_containers=%s gpu_containers_up=%s",
+            app_id,
+            total_containers,
+            max(total_containers - 1, 0),
+        )
+        return max(total_containers - 1, 0)
+    except Exception:
+        logger.exception("modal_gpu_count_failed app_id=%s", app_id)
+        return None
 
 
 def get_snapshot(conn: sqlite3.Connection) -> MetricsSnapshot:
@@ -146,6 +280,10 @@ def get_snapshot(conn: sqlite3.Connection) -> MetricsSnapshot:
     gpu_containers_active = int(gpu_row["active_cnt"] or 0)
     gpu_active_calls = int(gpu_row["active_calls"] or 0)
     gpu_routes_up = int(gpu_row["routes_up"] or 0)
+
+    modal_gpu_up = _modal_gpu_containers_up()
+    if modal_gpu_up is not None:
+        gpu_containers_up = modal_gpu_up
 
     return MetricsSnapshot(
         total_jobs=total,

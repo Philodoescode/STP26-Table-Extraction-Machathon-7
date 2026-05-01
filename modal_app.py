@@ -79,6 +79,7 @@ image = (
         "hydra-core==1.3.2",
         "omegaconf==2.3.0",
         "surya-ocr==0.17.1",
+        "modal",
         requirements=["backend-requirements.txt"],
     )
     .run_commands("mkdir -p /app/storage")
@@ -173,8 +174,6 @@ class TableExtractor:
             print(f"[TableExtractor] GPU: {torch.cuda.get_device_name(0)}", flush=True)
 
         from app.database import init_db
-        from app.services.gpu_runtime_metrics import mark_container_up
-        import socket
         init_db()
 
         # Surya layout detector
@@ -184,10 +183,6 @@ class TableExtractor:
         # TDATR structure recognition
         from app.services.tdatr_predictor import _get_tdatr_predictor
         _get_tdatr_predictor()
-
-        self._hostname = socket.gethostname()
-        self._container_key = f"{self.route_key}:{self._hostname}"
-        mark_container_up(self._container_key, self.route_key, self._hostname)
 
         print("[TableExtractor] Models ready", flush=True)
 
@@ -201,11 +196,9 @@ class TableExtractor:
         """
         from pathlib import Path
         from app.config import get_settings
-        from app.services.gpu_runtime_metrics import begin_call, end_call
         from app.services.table_pipeline import run_document_pipeline
 
         print(f"[TableExtractor:{self.route_key}] process_start job_id={job_id}", flush=True)
-        begin_call(self._container_key)
         settings = get_settings()
         file_path = Path(settings.storage_path) / job_id / f"original{suffix}"
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,14 +208,11 @@ class TableExtractor:
             table_results, latency_ms = run_document_pipeline(job_id, str(file_path))
             return {"table_results": table_results, "latency_ms": latency_ms}
         finally:
-            end_call(self._container_key)
             storage_volume.commit()
 
     @modal.exit()
     def on_exit(self) -> None:
-        from app.services.gpu_runtime_metrics import mark_container_down
-
-        mark_container_down(self._container_key)
+        return
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,16 @@ class MetricsSnapshot(BaseModel):
     gpu_utilization_pct: Optional[float] = None
     gpu_memory_used_mb: Optional[float] = None
     gpu_memory_total_mb: Optional[float] = None
+    gpu_containers_up: int = 0
+    gpu_containers_active: int = 0
+    gpu_active_calls: int = 0
+    gpu_routes_up: int = 0
+    gpu_max_containers: Optional[int] = None
+    gpu_min_containers: Optional[int] = None
+    gpu_buffer_containers: Optional[int] = None
+    gpu_scaledown_window_s: Optional[int] = None
+    gpu_routing_mode: Optional[str] = None
+    gpu_shards: Optional[int] = None
     jobs_per_minute: float
 
 

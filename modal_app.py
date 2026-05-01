@@ -10,8 +10,6 @@ Deploy:  modal deploy modal_app.py
 Serve:   modal serve modal_app.py
 """
 
-from __future__ import annotations
-
 import os
 
 import modal
@@ -19,11 +17,17 @@ import modal
 APP_NAME = os.getenv("MODAL_APP_NAME", "table-extraction-api")
 GPU_TYPE = os.getenv("MODAL_GPU", "T4")
 MIN_CONTAINERS = int(os.getenv("MODAL_MIN_CONTAINERS", "0"))
+# Scale-to-zero by default when idle.
 MIN_GPU_CONTAINERS = int(os.getenv("MODAL_MIN_GPU_CONTAINERS", str(MIN_CONTAINERS)))
-GPU_BUFFER_CONTAINERS = int(os.getenv("MODAL_GPU_BUFFER_CONTAINERS", "1"))
-MAX_GPU_CONTAINERS = int(os.getenv("MODAL_MAX_GPU_CONTAINERS", "5"))
+# Keep a warm buffer while active to absorb parallel requests.
+GPU_BUFFER_CONTAINERS = int(os.getenv("MODAL_GPU_BUFFER_CONTAINERS", "2"))
+MAX_GPU_CONTAINERS = int(os.getenv("MODAL_MAX_GPU_CONTAINERS", "3"))
 MAX_WEB_CONTAINERS = int(os.getenv("MODAL_MAX_WEB_CONTAINERS", "10"))
-SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "300"))
+# Scale idle containers down after 2 minutes by default.
+SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "120"))
+# Default to one shared GPU pool so max_containers cap is global/predictable.
+GPU_ROUTING_MODE = os.getenv("MODAL_GPU_ROUTING_MODE", "pool").lower()
+GPU_SHARDS = max(1, int(os.getenv("MODAL_GPU_SHARDS", "2")))
 STORAGE_VOLUME_NAME = os.getenv("MODAL_STORAGE_VOLUME", "table-extraction-storage")
 MODELS_VOLUME_NAME = os.getenv("MODAL_MODELS_VOLUME", "table-extraction-models")
 
@@ -109,6 +113,8 @@ _COMMON_ENV: dict[str, str] = {
     "DISPATCH_MODE": "modal",
     "MODAL_APP_NAME": APP_NAME,
     "MODAL_STORAGE_VOLUME": STORAGE_VOLUME_NAME,
+    "MODAL_GPU_ROUTING_MODE": GPU_ROUTING_MODE,
+    "MODAL_GPU_SHARDS": str(GPU_SHARDS),
 }
 
 # ---------------------------------------------------------------------------
@@ -122,7 +128,9 @@ _COMMON_ENV: dict[str, str] = {
     timeout=60 * 60,
     startup_timeout=60 * 30,
     max_containers=MAX_GPU_CONTAINERS,
-    min_containers=MIN_GPU_CONTAINERS,
+    # Parameterized classes cannot set min_containers>0 in decorator config.
+    # Use per-instance update_autoscaler() in WebApp.startup instead.
+    min_containers=0,
     # Keep extra warm GPU capacity during active periods to absorb burst uploads.
     buffer_containers=GPU_BUFFER_CONTAINERS,
     scaledown_window=SCALEDOWN_WINDOW,
@@ -136,6 +144,9 @@ _COMMON_ENV: dict[str, str] = {
     enable_memory_snapshot=True,
 )
 class TableExtractor:
+    # Distinct route_key values create distinct autoscaling pools.
+    route_key: str = modal.parameter(default="pool-0")
+
     @modal.enter(snap=True)
     def preload_libraries(self) -> None:
         """Import CPU-safe libraries before snapshot (captured for all future restores)."""
@@ -162,6 +173,8 @@ class TableExtractor:
             print(f"[TableExtractor] GPU: {torch.cuda.get_device_name(0)}", flush=True)
 
         from app.database import init_db
+        from app.services.gpu_runtime_metrics import mark_container_up
+        import socket
         init_db()
 
         # Surya layout detector
@@ -171,6 +184,10 @@ class TableExtractor:
         # TDATR structure recognition
         from app.services.tdatr_predictor import _get_tdatr_predictor
         _get_tdatr_predictor()
+
+        self._hostname = socket.gethostname()
+        self._container_key = f"{self.route_key}:{self._hostname}"
+        mark_container_up(self._container_key, self.route_key, self._hostname)
 
         print("[TableExtractor] Models ready", flush=True)
 
@@ -184,8 +201,11 @@ class TableExtractor:
         """
         from pathlib import Path
         from app.config import get_settings
+        from app.services.gpu_runtime_metrics import begin_call, end_call
         from app.services.table_pipeline import run_document_pipeline
 
+        print(f"[TableExtractor:{self.route_key}] process_start job_id={job_id}", flush=True)
+        begin_call(self._container_key)
         settings = get_settings()
         file_path = Path(settings.storage_path) / job_id / f"original{suffix}"
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,7 +215,14 @@ class TableExtractor:
             table_results, latency_ms = run_document_pipeline(job_id, str(file_path))
             return {"table_results": table_results, "latency_ms": latency_ms}
         finally:
+            end_call(self._container_key)
             storage_volume.commit()
+
+    @modal.exit()
+    def on_exit(self) -> None:
+        from app.services.gpu_runtime_metrics import mark_container_down
+
+        mark_container_down(self._container_key)
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +271,39 @@ class WebApp:
 
         from app.database import init_db
         init_db()
+
+        # Warm GPU pools dynamically for parameterized TableExtractor instances.
+        # Modal constraint: parameterized functions cannot set min_containers>0
+        # in decorator config, so we set it per instance here.
+        if MIN_GPU_CONTAINERS > 0:
+            try:
+                keys: list[str] = []
+                if GPU_ROUTING_MODE == "pool":
+                    keys = ["pool-0"]
+                elif GPU_ROUTING_MODE == "shard":
+                    keys = [f"shard-{i}" for i in range(GPU_SHARDS)]
+                else:
+                    # Fallback to shard mode for any unknown routing mode.
+                    keys = [f"shard-{i}" for i in range(GPU_SHARDS)]
+
+                if keys:
+                    base = MIN_GPU_CONTAINERS // len(keys)
+                    rem = MIN_GPU_CONTAINERS % len(keys)
+                    for i, key in enumerate(keys):
+                        min_for_key = base + (1 if i < rem else 0)
+                        TableExtractor(route_key=key).update_autoscaler(  # type: ignore[attr-defined]
+                            min_containers=min_for_key,
+                            max_containers=MAX_GPU_CONTAINERS,
+                            buffer_containers=GPU_BUFFER_CONTAINERS,
+                            scaledown_window=SCALEDOWN_WINDOW,
+                        )
+                    print(
+                        f"[WebApp] applied GPU autoscaler warmup mode={GPU_ROUTING_MODE} "
+                        f"keys={keys} total_min={MIN_GPU_CONTAINERS}",
+                        flush=True,
+                    )
+            except Exception as exc:
+                print(f"[WebApp] GPU autoscaler warmup skipped: {exc}", flush=True)
 
     @modal.asgi_app()
     def serve(self):

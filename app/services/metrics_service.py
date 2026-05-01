@@ -9,6 +9,7 @@ Handles the business logic for:
 from __future__ import annotations
 
 import math
+import os
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -123,6 +124,29 @@ def get_snapshot(conn: sqlite3.Connection) -> MetricsSnapshot:
 
     gpu = _gpu_info()
 
+    scaledown_window_s = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "120"))
+    stale_seconds = scaledown_window_s + 30
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=stale_seconds)).isoformat()
+
+    gpu_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS up_cnt,
+            SUM(CASE WHEN active_calls > 0 THEN 1 ELSE 0 END) AS active_cnt,
+            SUM(active_calls) AS active_calls,
+            COUNT(DISTINCT route_key) AS routes_up
+        FROM gpu_container_state
+        WHERE is_up = 1
+          AND last_heartbeat_at >= ?
+        """,
+        [stale_cutoff],
+    ).fetchone()
+
+    gpu_containers_up = int(gpu_row["up_cnt"] or 0)
+    gpu_containers_active = int(gpu_row["active_cnt"] or 0)
+    gpu_active_calls = int(gpu_row["active_calls"] or 0)
+    gpu_routes_up = int(gpu_row["routes_up"] or 0)
+
     return MetricsSnapshot(
         total_jobs=total,
         success_count=success,
@@ -130,6 +154,16 @@ def get_snapshot(conn: sqlite3.Connection) -> MetricsSnapshot:
         avg_latency_ms=avg_lat,
         p95_latency_ms=p95,
         jobs_per_minute=jpm,
+        gpu_containers_up=gpu_containers_up,
+        gpu_containers_active=gpu_containers_active,
+        gpu_active_calls=gpu_active_calls,
+        gpu_routes_up=gpu_routes_up,
+        gpu_max_containers=int(os.getenv("MODAL_MAX_GPU_CONTAINERS", "3")),
+        gpu_min_containers=int(os.getenv("MODAL_MIN_GPU_CONTAINERS", "0")),
+        gpu_buffer_containers=int(os.getenv("MODAL_GPU_BUFFER_CONTAINERS", "2")),
+        gpu_scaledown_window_s=scaledown_window_s,
+        gpu_routing_mode=os.getenv("MODAL_GPU_ROUTING_MODE", "pool"),
+        gpu_shards=int(os.getenv("MODAL_GPU_SHARDS", "2")),
         **gpu,
     )
 

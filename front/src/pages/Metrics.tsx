@@ -167,6 +167,22 @@ export default function MetricsPage() {
                     <div className="text-xs text-muted-foreground font-light max-w-xs truncate" title={metrics?.gpu_name || "Standard processing mode"}>
                       {metrics?.gpu_name || "Standard general-purpose compute"}
                     </div>
+                    <div className="text-xs text-muted-foreground/90 font-light mt-2 space-y-1">
+                      <div>
+                        GPU containers up: <span className="tabular-nums">{metrics?.gpu_containers_up ?? 0}</span>
+                        {" / "}
+                        <span className="tabular-nums">{metrics?.gpu_max_containers ?? 0}</span>
+                      </div>
+                      <div>
+                        Active containers: <span className="tabular-nums">{metrics?.gpu_containers_active ?? 0}</span>
+                        {" · "}Active calls: <span className="tabular-nums">{metrics?.gpu_active_calls ?? 0}</span>
+                      </div>
+                      <div>
+                        Routing: <span className="tabular-nums">{metrics?.gpu_routing_mode || "pool"}</span>
+                        {" · "}Shards: <span className="tabular-nums">{metrics?.gpu_shards ?? 1}</span>
+                        {" · "}Routes up: <span className="tabular-nums">{metrics?.gpu_routes_up ?? 0}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

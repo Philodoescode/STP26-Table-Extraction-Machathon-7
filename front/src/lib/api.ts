@@ -91,6 +91,16 @@ export interface MetricsSnapshot {
   gpu_utilization_pct: number | null;
   gpu_memory_used_mb: number | null;
   gpu_memory_total_mb: number | null;
+  gpu_containers_up: number;
+  gpu_containers_active: number;
+  gpu_active_calls: number;
+  gpu_routes_up: number;
+  gpu_max_containers: number | null;
+  gpu_min_containers: number | null;
+  gpu_buffer_containers: number | null;
+  gpu_scaledown_window_s: number | null;
+  gpu_routing_mode: string | null;
+  gpu_shards: number | null;
   jobs_per_minute: number;
 }
 

@@ -111,3 +111,37 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_jobs_finished ON jobs(finished_at)"
         )
+
+        # ── Routing state (global counters for request steering) ─────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS routing_state (
+                key_name TEXT PRIMARY KEY,
+                value    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO routing_state (key_name, value)
+            VALUES ('gpu_shard_rr', 0)
+            """
+        )
+
+        # ── GPU runtime container state for live metrics ────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS gpu_container_state (
+                container_key      TEXT PRIMARY KEY,
+                route_key          TEXT NOT NULL,
+                hostname           TEXT NOT NULL,
+                is_up              INTEGER NOT NULL DEFAULT 1,
+                active_calls       INTEGER NOT NULL DEFAULT 0,
+                started_at         TEXT NOT NULL,
+                last_heartbeat_at  TEXT NOT NULL,
+                last_down_at       TEXT
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gpu_state_heartbeat ON gpu_container_state(last_heartbeat_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gpu_state_route ON gpu_container_state(route_key)"
+        )

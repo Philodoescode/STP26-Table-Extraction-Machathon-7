@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type MetricsSnapshot } from "@/lib/api";
+import { ApiError, api, type MetricsSnapshot } from "@/lib/api";
 
 type UseMetricsOptions = {
   pollingIntervalMs?: number;
@@ -32,7 +32,12 @@ export function useMetrics({
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err : new Error(String(err)));
+          const e = err instanceof Error ? err : new Error(String(err));
+          // Keep the last known-good metrics during transient backend/network blips.
+          if (e instanceof ApiError && e.transient) {
+            return;
+          }
+          setError(e);
         }
       } finally {
         if (mounted) {

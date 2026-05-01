@@ -70,63 +70,121 @@ export interface MetricsSnapshot {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
+type ApiErrorDetail = {
+  detail?: string;
+  code?: string;
+};
+
+class ApiError extends Error {
+  status: number;
+  code?: string;
+  transient: boolean;
+
+  constructor(message: string, status: number, code?: string, transient = false) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.transient = transient;
+  }
+}
+
+const TRANSIENT_CODES = new Set(["TEMPORARY_UNAVAILABLE", "NOT_FOUND", "FILE_MISSING"]);
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toApiError(status: number, detail?: ApiErrorDetail): ApiError {
+  const code = detail?.code;
+  const message = detail?.detail || `Request failed with status ${status}`;
+  const transient = RETRYABLE_STATUS.has(status) || (status === 404 && !!code && TRANSIENT_CODES.has(code));
+  return new ApiError(message, status, code, transient);
+}
+
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { retries?: number; retryDelayMs?: number },
+): Promise<T> {
+  const retries = options?.retries ?? 3;
+  const retryDelayMs = options?.retryDelayMs ?? 250;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE_URL}${path}`, init);
+      if (res.ok) return res.json() as Promise<T>;
+
+      let detail: ApiErrorDetail | undefined;
+      try {
+        detail = await res.json();
+      } catch {
+        detail = undefined;
+      }
+
+      const apiErr = toApiError(res.status, detail);
+      if (!apiErr.transient || attempt === retries) throw apiErr;
+      await sleep(retryDelayMs * attempt);
+      continue;
+    } catch (err) {
+      const networkErr = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
+      if (networkErr) {
+        if (attempt === retries) {
+          throw new ApiError("Network error while contacting API", 0, "NETWORK_ERROR", true);
+        }
+        await sleep(retryDelayMs * attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new ApiError("Request failed", 0, "UNKNOWN");
+}
+
 export const api = {
   async getJob(jobId: string): Promise<JobResponse> {
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`);
-    if (!res.ok) throw new Error("Failed to fetch job");
-    return res.json();
+    return requestJson<JobResponse>(`/jobs/${jobId}`);
   },
 
   async getTables(jobId: string): Promise<TableResponse[]> {
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/tables`);
-    if (!res.ok) throw new Error("Failed to fetch tables");
-    return res.json();
+    return requestJson<TableResponse[]>(`/jobs/${jobId}/tables`);
   },
 
   async getTablePreview(jobId: string, tableId: string): Promise<PreviewResponse> {
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/tables/${tableId}/preview`);
-    if (!res.ok) throw new Error("Failed to fetch table preview");
-    return res.json();
+    return requestJson<PreviewResponse>(`/jobs/${jobId}/tables/${tableId}/preview`);
   },
 
   async updateTablePreview(jobId: string, tableId: string, overrides: PreviewUpdateRequest): Promise<PreviewUpdateResponse> {
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/tables/${tableId}/preview`, {
+    return requestJson<PreviewUpdateResponse>(`/jobs/${jobId}/tables/${tableId}/preview`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(overrides),
     });
-    if (!res.ok) throw new Error("Failed to update table preview");
-    return res.json();
   },
 
   async exportJob(jobId: string, format: ExportFormat = "csv"): Promise<ExportResponse> {
-    const res = await fetch(
-      `${API_BASE_URL}/jobs/${jobId}/export?format=${encodeURIComponent(format)}`,
-      {
-        method: "POST",
-      }
+    return requestJson<ExportResponse>(
+      `/jobs/${jobId}/export?format=${encodeURIComponent(format)}`,
+      { method: "POST" }
     );
-    if (!res.ok) throw new Error("Failed to export job");
-    return res.json();
   },
   
   async createJob(file: File): Promise<JobResponse> {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE_URL}/upload`, {
+    return requestJson<JobResponse>("/upload", {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to create job");
-    return res.json();
   },
 
   async getMetrics(): Promise<MetricsSnapshot> {
-    const res = await fetch(`${API_BASE_URL}/metrics`);
-    if (!res.ok) throw new Error("Failed to fetch metrics");
-    return res.json();
+    return requestJson<MetricsSnapshot>("/metrics", undefined, { retries: 4, retryDelayMs: 300 });
   }
 };
+
+export { ApiError };
 
 export const transformPreviewTo2DArray = (preview: PreviewResponse): string[][] => {
   return preview.rows.map(row => row.map(cell => cell.text));

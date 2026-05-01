@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { type Detection } from "@/lib/extract-utils";
-import { api, transformPreviewTo2DArray } from "@/lib/api";
+import { ApiError, api, transformPreviewTo2DArray, type JobResponse } from "@/lib/api";
 import { toast } from "sonner";
 
 export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
@@ -45,15 +45,99 @@ export const useExtractProcessor = (files: any[], onComplete?: () => void) => {
       const job = await api.createJob(file);
       setJobId(job.job_id);
 
+      const statusRank: Record<string, number> = {
+        pending: 0,
+        processing: 1,
+        done: 2,
+        failed: 3,
+      };
+      const stageRank: Record<string, number> = {
+        queued: 0,
+        rasterizing: 1,
+        waiting_for_gpu: 2,
+        detecting: 3,
+        structure_recognition: 4,
+        storing: 5,
+        done: 6,
+      };
+      const isTerminal = (s?: string) => s === "done" || s === "failed";
+      const pollIntervalMs = 1000;
+      const maxTransientPollErrors = 8;
+      const stuckProbeAfterMs = 12000;
+
+      const mergeJobView = (best: JobResponse, incoming: JobResponse): JobResponse => {
+        const bestStatus = best.status || "pending";
+        const nextStatus = incoming.status || bestStatus;
+        const mergedStatus =
+          (statusRank[nextStatus] ?? -1) >= (statusRank[bestStatus] ?? -1) ? nextStatus : bestStatus;
+
+        const bestStage = best.stage || "queued";
+        const nextStage = incoming.stage || bestStage;
+        const mergedStage =
+          (stageRank[nextStage] ?? -1) >= (stageRank[bestStage] ?? -1) ? nextStage : bestStage;
+
+        const mergedProgress = Math.max(best.progress || 0, incoming.progress || 0);
+        return {
+          ...best,
+          ...incoming,
+          status: mergedStatus,
+          stage: mergedStage,
+          progress: mergedProgress,
+          error: incoming.error || best.error,
+        };
+      };
+
       let currentJob = job;
-      while (currentJob.status !== "done" && currentJob.status !== "failed") {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        currentJob = await api.getJob(job.job_id);
-        setProgress(currentJob.progress || 0);
+      let bestJob = job;
+      let transientPollErrors = 0;
+      const pollStartedAt = Date.now();
+
+      while (!isTerminal(bestJob.status)) {
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+        try {
+          currentJob = await api.getJob(job.job_id);
+          bestJob = mergeJobView(bestJob, currentJob);
+          transientPollErrors = 0;
+          setProgress(bestJob.progress || 0);
+        } catch (e) {
+          const err = e as unknown;
+          if (err instanceof ApiError && err.transient) {
+            transientPollErrors += 1;
+            if (transientPollErrors <= maxTransientPollErrors) {
+              continue;
+            }
+          }
+          throw err;
+        }
+
+        // If status polling stays stale for too long, probe tables endpoint.
+        // This helps when job status reads lag while result rows are already visible.
+        const elapsedMs = Date.now() - pollStartedAt;
+        if (
+          elapsedMs >= stuckProbeAfterMs &&
+          (bestJob.status === "pending" || bestJob.status === "processing")
+        ) {
+          try {
+            await api.getTables(job.job_id);
+            bestJob = {
+              ...bestJob,
+              status: "done",
+              stage: "done",
+              progress: 100,
+            };
+            setProgress(100);
+            break;
+          } catch (probeErr) {
+            if (!(probeErr instanceof ApiError && probeErr.transient)) {
+              throw probeErr;
+            }
+          }
+        }
       }
 
-      if (currentJob.status === "failed") {
-        throw new Error(currentJob.error || "Job processing failed");
+      if (bestJob.status === "failed") {
+        throw new Error(bestJob.error || "Job processing failed");
       }
 
       setProgress(100);

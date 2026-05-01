@@ -69,7 +69,13 @@ async def upload_file(file: UploadFile):
 
     # Commit the new job row so other WebApp containers can find it when polled.
     from app.services.modal_volume import commit_storage_async
-    await commit_storage_async()
+    try:
+        await commit_storage_async(strict=True)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"detail": "Failed to persist job metadata", "code": "STORAGE_COMMIT_ERROR"},
+        ) from exc
 
     # Dispatch — on Modal passes bytes so TableExtractor writes the file itself,
     # avoiding any cross-container Volume visibility dependency.
@@ -87,6 +93,11 @@ async def upload_file(file: UploadFile):
         )
         with get_db() as conn:
             conn.execute("DELETE FROM jobs WHERE id = ?", [job_id])
+        if on_modal:
+            try:
+                await commit_storage_async(strict=True)
+            except Exception:
+                logger.warning("%s cleanup_commit_failed job_id=%s", modal_input_label(), job_id)
         if not on_modal:
             shutil.rmtree(job_dir(job_id), ignore_errors=True)
         raise HTTPException(

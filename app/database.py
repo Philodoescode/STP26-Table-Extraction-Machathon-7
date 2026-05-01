@@ -13,25 +13,38 @@ def _db_path() -> str:
 
 
 @contextmanager
-def get_db():
-    # timeout=30: wait up to 30s for the file lock on a shared network volume.
-    conn = sqlite3.connect(_db_path(), check_same_thread=False, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    # busy_timeout lets SQLite retry on SQLITE_BUSY instead of raising immediately.
-    conn.execute("PRAGMA busy_timeout=10000")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+def get_db(*, create_if_missing: bool = False):
+    from app.services.modal_volume import storage_io_guard
+
+    with storage_io_guard():
+        db_path = _db_path()
+        if create_if_missing:
+            dsn = db_path
+            uri = False
+        else:
+            # Do not auto-create a blank DB file during transient volume states.
+            dsn = f"file:{db_path}?mode=rw"
+            uri = True
+
+        # timeout=30: wait up to 30s for the file lock on a shared network volume.
+        conn = sqlite3.connect(dsn, check_same_thread=False, timeout=30, uri=uri)
+        conn.row_factory = sqlite3.Row
+        # Shared-volume deployment: rollback journal is more conservative than WAL.
+        conn.execute("PRAGMA journal_mode=DELETE")
+        # busy_timeout lets SQLite retry on SQLITE_BUSY instead of raising immediately.
+        conn.execute("PRAGMA busy_timeout=10000")
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 def init_db() -> None:
-    with get_db() as conn:
+    with get_db(create_if_missing=True) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
                 id          TEXT PRIMARY KEY,

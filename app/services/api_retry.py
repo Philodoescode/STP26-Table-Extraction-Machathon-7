@@ -30,6 +30,7 @@ def run_with_read_retries(
     action: Callable[[], T],
     *,
     reload_before_attempt: Callable[[], None] | None = None,
+    eager_reload: bool = False,
     attempts: int = 3,
     base_delay_s: float = 0.15,
 ) -> T:
@@ -37,7 +38,7 @@ def run_with_read_retries(
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
-            if reload_before_attempt is not None:
+            if reload_before_attempt is not None and (eager_reload or attempt > 1):
                 reload_before_attempt()
             return action()
         except Exception as exc:

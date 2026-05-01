@@ -45,7 +45,7 @@ def get_job(job_id: str):
             row = _get_job_or_404(conn, job_id)
             return _row_to_job(row)
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 # GET /api/v1/jobs/{job_id}/tables
@@ -72,7 +72,7 @@ def list_tables(job_id: str):
             for r in rows
         ]
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 # GET /api/v1/jobs/{job_id}/tables/{table_id}/crop
@@ -99,7 +99,7 @@ def get_crop(job_id: str, table_id: str):
             headers={"Content-Disposition": f'inline; filename="{crop.name}"'},
         )
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 def _download_export(job_id: str, export_format: str):
@@ -136,7 +136,7 @@ def _download_export(job_id: str, export_format: str):
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 # GET /api/v1/jobs/{job_id}/csv

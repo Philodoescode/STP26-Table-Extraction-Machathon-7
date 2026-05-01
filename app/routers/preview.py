@@ -41,7 +41,7 @@ def preview_table(job_id: str, table_id: str):
         with get_db() as conn:
             return get_table_preview(conn, job_id, table_id)
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 @router.put(

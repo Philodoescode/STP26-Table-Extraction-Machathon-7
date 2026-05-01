@@ -19,6 +19,8 @@ import modal
 APP_NAME = os.getenv("MODAL_APP_NAME", "table-extraction-api")
 GPU_TYPE = os.getenv("MODAL_GPU", "T4")
 MIN_CONTAINERS = int(os.getenv("MODAL_MIN_CONTAINERS", "0"))
+MIN_GPU_CONTAINERS = int(os.getenv("MODAL_MIN_GPU_CONTAINERS", str(MIN_CONTAINERS)))
+GPU_BUFFER_CONTAINERS = int(os.getenv("MODAL_GPU_BUFFER_CONTAINERS", "1"))
 MAX_GPU_CONTAINERS = int(os.getenv("MODAL_MAX_GPU_CONTAINERS", "5"))
 MAX_WEB_CONTAINERS = int(os.getenv("MODAL_MAX_WEB_CONTAINERS", "10"))
 SCALEDOWN_WINDOW = int(os.getenv("MODAL_SCALEDOWN_WINDOW", "300"))
@@ -120,7 +122,9 @@ _COMMON_ENV: dict[str, str] = {
     timeout=60 * 60,
     startup_timeout=60 * 30,
     max_containers=MAX_GPU_CONTAINERS,
-    min_containers=MIN_CONTAINERS,
+    min_containers=MIN_GPU_CONTAINERS,
+    # Keep extra warm GPU capacity during active periods to absorb burst uploads.
+    buffer_containers=GPU_BUFFER_CONTAINERS,
     scaledown_window=SCALEDOWN_WINDOW,
     volumes={
         STORAGE_MOUNT: storage_volume,
@@ -179,8 +183,37 @@ class TableExtractor:
         commits after the job finishes so WebApp containers can read the results.
         """
         from pathlib import Path
+        import time
         from app.config import get_settings
+        from app.database import get_db
         from app.services.table_pipeline import process_document
+
+        # Sync view and wait until the just-created job row is visible in this container.
+        # Back-to-back uploads can race volume visibility across containers.
+        visible = False
+        for attempt in range(1, 11):
+            try:
+                storage_volume.reload()
+            except Exception as exc:
+                print(
+                    f"[TableExtractor] storage_volume.reload() failed on attempt {attempt} (non-fatal): {exc}",
+                    flush=True,
+                )
+            try:
+                with get_db() as conn:
+                    row = conn.execute("SELECT id FROM jobs WHERE id = ?", [job_id]).fetchone()
+                if row is not None:
+                    visible = True
+                    break
+            except Exception as exc:
+                print(
+                    f"[TableExtractor] job-row probe failed on attempt {attempt} for {job_id}: {exc}",
+                    flush=True,
+                )
+            time.sleep(0.15 * attempt)
+
+        if not visible:
+            raise RuntimeError(f"Job row {job_id} not visible in TableExtractor after reload retries")
 
         settings = get_settings()
         file_path = Path(settings.storage_path) / job_id / f"original{suffix}"

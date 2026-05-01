@@ -34,7 +34,7 @@ def metrics_snapshot():
         with get_db() as conn:
             return get_snapshot(conn)
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)
 
 
 @router.get(
@@ -64,4 +64,4 @@ def metrics_history(
         with get_db() as conn:
             return get_history(conn, window=window, granularity=granularity)
 
-    return run_with_read_retries(_read, reload_before_attempt=reload_storage)
+    return run_with_read_retries(_read, reload_before_attempt=reload_storage, eager_reload=True)

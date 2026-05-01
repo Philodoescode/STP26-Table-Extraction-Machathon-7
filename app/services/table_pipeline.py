@@ -82,7 +82,9 @@ def _update_job(job_id: str, **kwargs) -> None:
         if not fields:
             return
         values.append(job_id)
-        conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+        cur = conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+        if cur.rowcount == 0:
+            _log(f"[{job_id}] warning: jobs row not found while updating ({', '.join(kwargs.keys())})")
 
 
 @contextmanager

@@ -152,7 +152,7 @@ async def chat_endpoint(body: ChatRequest):
         logger.info(f"Sending {len(contents_for_gemini)} messages to Gemini")
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.1-flash-lite-preview",
             contents=contents_for_gemini,
             config=types.GenerateContentConfig(
                 system_instruction=full_instruction,

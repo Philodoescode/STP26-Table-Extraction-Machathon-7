@@ -55,6 +55,7 @@ services:
 
       # CORS origins for the Vite frontend
       - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
     # GPU passthrough via nvidia-container-toolkit
     deploy:
@@ -90,4 +91,3 @@ services:
     command: >
       bash -c "pip install -r /app/Chatbot/requirements.txt && cd /app/Chatbot && uvicorn server:app --host 0.0.0.0 --port 8001"
     restart: unless-stopped
-

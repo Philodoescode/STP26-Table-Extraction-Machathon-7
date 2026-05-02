@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import health, jobs, metrics, preview, upload
+from app.routers import health, jobs, metrics, preview, smithy, upload
 from app.services.modal_logging import modal_input_label
 
 logger = logging.getLogger(__name__)
@@ -99,3 +99,4 @@ app.include_router(upload.router)
 app.include_router(jobs.router)
 app.include_router(preview.router)
 app.include_router(metrics.router)
+app.include_router(smithy.router)

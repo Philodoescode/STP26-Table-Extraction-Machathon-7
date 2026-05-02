@@ -23,7 +23,8 @@ function SmithyAvatar({ size = 32 }: { size?: number }) {
 }
 
 // ─── Chat panel body ─────────────────────────────────────────────────────────
-const SMITHY_API_URL = import.meta.env.VITE_SMITHY_API_URL || "http://localhost:8001"
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"
+const SMITHY_API_URL = import.meta.env.VITE_SMITHY_API_URL || `${API_BASE_URL}/smithy`
 
 interface SmithyChatPanelProps {
   onClose: () => void

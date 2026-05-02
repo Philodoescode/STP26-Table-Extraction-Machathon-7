@@ -32,9 +32,13 @@ def _sse_event(payload: dict) -> bytes:
 
 
 async def _process_upload(
-    file: UploadFile,
+    file: UploadFile | None = None,
     mode: str = "accurate",
     progress_cb=None,
+    *,
+    file_bytes: bytes | None = None,
+    filename: str | None = None,
+    content_type: str | None = None,
 ) -> dict:
     async def _emit(payload: dict) -> None:
         if progress_cb is None:
@@ -46,12 +50,24 @@ async def _process_upload(
     settings = get_settings()
     on_modal = os.getenv("DISPATCH_MODE") == "modal"
 
-    # Read the full file once so we can validate and (on Modal) pass as bytes.
-    file_bytes = await file.read()
+    if file_bytes is None:
+        if file is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"detail": "No uploaded file payload", "code": "NO_FILE"},
+            )
+        # Read the full file once so we can validate and (on Modal) pass as bytes.
+        file_bytes = await file.read()
+        filename = filename or file.filename
+        content_type = content_type or file.content_type
+    else:
+        if file is not None:
+            filename = filename or file.filename
+            content_type = content_type or file.content_type
 
     # Magic-byte validation
     kind = filetype.guess(file_bytes[:_MAX_HEADER])
-    mime = kind.mime if kind else (file.content_type or "")
+    mime = kind.mime if kind else (content_type or "")
     if mime not in ALLOWED_MIMES:
         raise HTTPException(
             status_code=422,
@@ -67,7 +83,8 @@ async def _process_upload(
         )
 
     job_id = new_job_id()
-    suffix = Path(file.filename or "upload").suffix.lower()
+    safe_filename = filename or "upload"
+    suffix = Path(safe_filename).suffix.lower()
     # Store the logical path; on Modal the TableExtractor writes it to this location.
     file_path = str(Path(settings.storage_path) / job_id / f"original{suffix}")
 
@@ -78,7 +95,7 @@ async def _process_upload(
         async with aiofiles.open(dest, "wb") as out:
             await out.write(file_bytes)
 
-    filename = file.filename or "upload"
+    filename = safe_filename
     created_at = datetime.now(timezone.utc).isoformat()
     started_at = created_at
     run_started = time.perf_counter()
@@ -277,6 +294,12 @@ async def upload_file(file: UploadFile, mode: str = Form("accurate")):
 
 @router.post("/upload/stream")
 async def upload_file_stream(file: UploadFile, mode: str = Form("accurate")):
+    # Buffer file payload before starting the background task because UploadFile
+    # can be closed once request handling returns the streaming response.
+    buffered_bytes = await file.read()
+    buffered_filename = file.filename
+    buffered_content_type = file.content_type
+
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
     async def _progress_cb(payload: dict) -> None:
@@ -284,7 +307,13 @@ async def upload_file_stream(file: UploadFile, mode: str = Form("accurate")):
 
     async def _runner() -> None:
         try:
-            result = await _process_upload(file, mode=mode, progress_cb=_progress_cb)
+            result = await _process_upload(
+                mode=mode,
+                progress_cb=_progress_cb,
+                file_bytes=buffered_bytes,
+                filename=buffered_filename,
+                content_type=buffered_content_type,
+            )
             await queue.put({"type": "done", "job": result})
         except HTTPException as exc:
             await queue.put(

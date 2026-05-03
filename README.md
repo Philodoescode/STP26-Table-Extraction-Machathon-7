@@ -23,6 +23,17 @@
 >
 > 🥈 **2nd place overall**
 
+## Contents
+
+- [TL;DR](#tldr)
+- [Project Overview](#project-overview)
+- [Pipeline Architecture](#pipeline-architecture)
+- [Phase Results](#phase-results)
+- [Deployed Application](#deployed-application)
+- [Getting Started](#getting-started)
+- [Limitations](#limitations)
+- [Team](#team)
+
 ## TL;DR
 
 Upload a PDF or image and get structured tables back as CSV or Excel in seconds.

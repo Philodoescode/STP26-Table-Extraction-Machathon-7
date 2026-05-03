@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tablesmith TS Icon</title>
+  <desc id="desc">Stylized TS monogram used in the Tablesmith tutorial.</desc>
+  <g transform="translate(64 74)">
+    <text
+      x="-33"
+      y="0"
+      font-family="Inter, Segoe UI, Arial, sans-serif"
+      font-size="64"
+      font-style="italic"
+      font-weight="900"
+      letter-spacing="0"
+      fill="#4f46e5"
+    >T</text>
+    <text
+      x="-1"
+      y="0"
+      font-family="Inter, Segoe UI, Arial, sans-serif"
+      font-size="64"
+      font-style="italic"
+      font-weight="900"
+      letter-spacing="0"
+      fill="#22c55e"
+    >S</text>
+  </g>
+</svg>

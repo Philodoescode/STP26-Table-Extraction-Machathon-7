@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Storage (large, runtime-generated)
+storage/
+
+# Frontend (separate build step)
+front/
+
+# Notebooks and model experimentation
+model-related/
+*.ipynb
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Env files (secrets — passed via docker-compose env or runtime)
+.env
+.env.*
+!.env.example
+
+# Misc
+nul
+*.log

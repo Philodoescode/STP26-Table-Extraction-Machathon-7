@@ -1,0 +1,93 @@
+
+
+services:
+  api:
+    build: .
+    image: table-extraction-api
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # Persisted job files (uploads, crops, CSVs, SQLite DB)
+      - ./storage:/app/storage
+
+      # Live-mount source code (no rebuild needed for Python changes)
+      - ./app:/app/app
+      # Live-mount TDATR code for fast iteration (no rebuild needed for TDATR Python edits)
+      - ./TDATR:/app/TDATR
+
+      # TDATR model checkpoint (single .pt file, read-only)
+      # Set HOST_TDATR_CHECKPOINT in .env to the absolute path of the model.pt file
+      - ${HOST_TDATR_CHECKPOINT}:/models/model.pt:ro
+
+      # Surya layout model directory (read-only)
+      # Set HOST_SURYA_LAYOUT_MODEL_DIR in .env to the absolute path of the checkpoint dir
+      - ${HOST_SURYA_LAYOUT_MODEL_DIR}:/models/surya_layout:ro
+
+      # Surya recognition model directory (read-only)
+      - ${HOST_SURYA_RECOGNITION_MODEL_DIR}:/models/surya_recognition:ro
+
+      # TATR Structure Recognition checkpoint (.pt file)
+      - ${TATR_TSR_CHECKPOINT}:/models/tatr_tsr.pt:ro
+
+    environment:
+      # Storage (inside container)
+      - STORAGE_PATH=/app/storage
+      - DATABASE_PATH=/app/storage/jobs.db
+
+      # Model paths (inside container)
+      - TDATR_REPO_DIR=/app/TDATR
+      - TDATR_CHECKPOINT_PATH=/models/model.pt
+      - SURYA_LAYOUT_MODEL_DIR=/models/surya_layout
+      - SURYA_RECOGNITION_MODEL_DIR=/models/surya_recognition
+      - TATR_MODEL_NAME=${TATR_MODEL_NAME:-microsoft/table-transformer-structure-recognition-v1.1-all}
+      - TATR_TSR_CHECKPOINT=/models/tatr_tsr.pt
+
+      # Tuning knobs (override via .env if needed)
+      - TABLE_DETECTION_THRESHOLD=0.0
+      - TABLE_DETECTION_PADDING=5.0
+      - TDATR_MAX_LEN=4096
+      - TDATR_TEMPERATURE=0.5
+      - MAX_FILE_SIZE_MB=100
+      - JOB_WORKER_COUNT=4
+      - GPU_CONCURRENCY=2
+      - JOB_QUEUE_SIZE=0
+
+      # CORS origins for the Vite frontend
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+    # GPU passthrough via nvidia-container-toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+    restart: unless-stopped
+
+  chatbot:
+    image: table-extraction-api
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./storage:/app/storage
+      - ./Chatbot:/app/Chatbot
+      # Load the main .env file
+      - ./.env:/app/.env:ro
+    environment:
+      - DATABASE_PATH=/app/storage/jobs.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    # Install dependencies on the fly and start the server so we don't have to rebuild the image
+    command: >
+      bash -c "pip install -r /app/Chatbot/requirements.txt && cd /app/Chatbot && uvicorn server:app --host 0.0.0.0 --port 8001"
+    restart: unless-stopped

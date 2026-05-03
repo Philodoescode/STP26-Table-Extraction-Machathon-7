@@ -60,11 +60,24 @@ across phases, culminating in a combination of **Surya Layout Detector** for bou
 
 ```mermaid
 flowchart LR
-    A["PDF / Image"] --> B["Rasterization\n(pypdfium2)"]
-    B --> C["Table Detection\n(Surya Layout)"]
-    C --> D["Table Crops"]
-    D --> E["TDATR VLM\n(TSR + OCR)"]
-    E --> F["CSV / JSON"]
+    I["Input<br/>PDF or Image"]
+
+    subgraph P["Preprocessing"]
+        R["Rasterization<br/>pypdfium2"]
+    end
+
+    subgraph D["Detection"]
+        T["Table Detection<br/>Surya Layout Detector"]
+        C["Crop Table Regions"]
+    end
+
+    subgraph X["Extraction"]
+        V["TDATR VLM<br/>Structure + OCR"]
+    end
+
+    O["Output<br/>CSV / JSON"]
+
+    I --> R --> T --> C --> V --> O
 ```
 
 ### Model Progression

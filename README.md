@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/tablesmith-ts-icon.svg" width="80" alt="Tablesmith">
+  <img src="images/logo.png" width="300" alt="Tablesmith">
 </p>
 
 # Tablesmith — STP 7.0 Table Extraction

@@ -26,7 +26,12 @@ def _get_client() -> genai.Client:
     if _client is None:
         api_key = os.getenv("GEMINI_API_KEY", "")
         if not api_key:
-            raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Smithy chat is currently turned off in production because the API key is intentionally disabled."
+                ),
+            )
         _client = genai.Client(api_key=api_key)
     return _client
 
@@ -145,7 +150,9 @@ async def chat_endpoint(body: ChatRequest):
 
         return {"reply": reply_text.strip()}
 
-    except HTTPException:
+    except HTTPException as e:
+        if e.status_code == 503 and "turned off in production" in str(e.detail):
+            return {"reply": str(e.detail)}
         raise
 
     except APIError as e:

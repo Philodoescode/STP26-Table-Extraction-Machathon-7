@@ -30,8 +30,8 @@ GPU_ROUTING_MODE = os.getenv("MODAL_GPU_ROUTING_MODE", "pool").lower()
 GPU_SHARDS = max(1, int(os.getenv("MODAL_GPU_SHARDS", "2")))
 STORAGE_VOLUME_NAME = os.getenv("MODAL_STORAGE_VOLUME", "table-extraction-storage")
 MODELS_VOLUME_NAME = os.getenv("MODAL_MODELS_VOLUME", "table-extraction-models")
-# Name of Modal Secret containing GEMINI_API_KEY
-MODAL_GEMINI_SECRET_NAME = os.getenv("MODAL_GEMINI_SECRET_NAME", "gemini-api").strip()
+# Optional Modal Secret containing GEMINI_API_KEY.
+MODAL_GEMINI_SECRET_NAME = os.getenv("MODAL_GEMINI_SECRET_NAME", "").strip()
 
 STORAGE_MOUNT = "/app/storage"
 MODELS_MOUNT = "/models"

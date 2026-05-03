@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/tablesmith-ts-icon.svg" width="80" alt="Tablesmith">
+</p>
+
 # Tablesmith — STP 7.0 Table Extraction
 
 > End-to-end table extraction from PDFs and images: detect tables, parse structure, export CSV/JSON.
@@ -47,17 +51,31 @@ flowchart LR
     E --> F["CSV / JSON"]
 ```
 
-### Stage Breakdown by Phase
+### Model Progression
 
-| Phase   | Stage                       | Model                    | Output                     |
-|---------|-----------------------------|--------------------------|----------------------------|
-| Phase 1 | Table Detection             | Table Transformer (TATR) | Bounding boxes             |
-| Phase 1 | Structure Recognition       | Table Transformer / TATR | Row/column structure       |
-| Phase 2 | Table Detection             | Table Transformer (TATR) | Bounding boxes             |
-| Phase 2 | Structure Recognition       | Table Transformer / TATR | Row/column structure       |
-| Phase 2 | OCR                         | PP-OCR                   | Cell text                  |
-| Final   | Table Detection             | Surya Layout Detector    | High-recall bounding boxes |
-| Final   | Structure Recognition + OCR | TDATR VLM (CVPR 2026)    | Structured cells with text |
+Each phase introduced a more capable stack. The final pipeline replaced every component.
+
+**Phase 1** — Detection + structure only, no OCR
+
+| Stage                 | Model                    |
+|-----------------------|--------------------------|
+| Table Detection       | Table Transformer (TATR) |
+| Structure Recognition | Table Transformer / TATR |
+
+**Phase 2** — Added OCR on top of the Phase 1 stack
+
+| Stage                 | Model                    |
+|-----------------------|--------------------------|
+| Table Detection       | Table Transformer (TATR) |
+| Structure Recognition | Table Transformer / TATR |
+| OCR                   | PP-OCR                   |
+
+**Final Phase** — Full pipeline replacement; end-to-end with a single VLM
+
+| Stage                       | Model                 |
+|-----------------------------|-----------------------|
+| Table Detection             | Surya Layout Detector |
+| Structure Recognition + OCR | TDATR VLM (CVPR 2026) |
 
 ### TDATR
 
@@ -95,7 +113,7 @@ re-initialization cost of subprocess-based approaches.
 
 **Live:** [table-extraction-front.onrender.com](https://table-extraction-front.onrender.com/)
 
-<!-- TODO: Add a screenshot of the UI here, e.g.: ![App screenshot](docs/screenshot.png) -->
+![Tablesmith landing page](images/landing-page.png)
 
 The production app is a full-stack deployment: a React frontend on Render, backed by a FastAPI service running on
 Modal with GPU inference. It exposes all pipeline capabilities through a polished UI.

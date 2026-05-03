@@ -1,124 +1,199 @@
-# SiamRAM Table Extraction Service
+# Tablesmith — STP 7.0 Table Extraction
 
-A high-performance table extraction pipeline that combines **Surya** for table detection and **TDATR** for table structure recognition.
+> End-to-end table extraction from PDFs and images: detect tables, parse structure, export CSV/JSON.
 
-## Overview
+<p align="center">
+  <a href="https://table-extraction-front.onrender.com/"><strong>Try the live app →</strong></a>
+</p>
 
-This service provides a robust API for extracting structured data (CSV/JSON) from tables in PDF and image documents. The pipeline follows these steps:
-1.  **Rasterization**: Converts PDF pages to high-resolution images.
-2.  **Detection (Surya)**: Detects table bounding boxes on each page.
-3.  **Structure Recognition (TDATR)**: Parses detected table crops into structured cells (rows, columns, text).
-4.  **Export**: Generates downloadable CSV and JSON results.
+![2nd Place Overall](https://img.shields.io/badge/STP%207.0%20Machathon-2nd%20Place%20Overall-silver?style=flat-square)
+![1st Raw Score](https://img.shields.io/badge/Model%20Score-1st%20Place-brightgreen?style=flat-square)
+![Phase 1 Winner](https://img.shields.io/badge/Phase%201-1st%20Place-gold?style=flat-square)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3120/)
+[![Docker](https://img.shields.io/badge/docker-CUDA%2012.8-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Modal](https://img.shields.io/badge/Modal-GPU%20Deployed-7C3AED?style=flat-square)](https://modal.com/)
+[![Demo](https://img.shields.io/badge/Demo-%E2%86%92-0ea5e9?style=flat-square)](https://table-extraction-front.onrender.com/)
 
-## Performance Optimization
+## TL;DR
 
-The TDATR structure recognition engine is integrated as an in-process singleton. The model is loaded into GPU memory on the first request and kept warm for subsequent jobs. This refactor eliminates the significant overhead of model re-initialization (saving ~30s per job compared to subprocess-based implementations).
+Upload a PDF or image and get structured tables back as CSV or Excel in seconds.
+**[Try it live →](https://table-extraction-front.onrender.com/)**
 
-The API also runs an internal job queue with worker threads, so uploads return immediately and multiple users can submit at once. Jobs are processed asynchronously by workers, and GPU sections are controlled with a semaphore to prevent unsafe overcommit.
+|               |                                                                 |
+|---------------|-----------------------------------------------------------------|
+| Fast mode     | TATR pipeline — low latency, CPU-only possible                  |
+| Accurate mode | Surya + TDATR VLM — full structure and OCR, GPU-backed          |
+| Export        | CSV or Excel (.xlsx) per table                                  |
+| AI assistant  | Ask Smithy questions about extracted tables in natural language |
 
----
+## Project Overview
+
+Built for the **STP 7.0 Machathon — Table Extraction** competition, a three-phase challenge that evaluated table
+detection, structure recognition, and full end-to-end OCR accuracy. The pipeline progressively upgraded its models
+across phases, culminating in a combination of **Surya Layout Detector** for bounding-box detection and **TDATR**
+(CVPR 2026) for joint structure recognition and OCR. The team achieved **1st place in Phase 1** and
+**1st place by raw model score**, placing **2nd overall** in the final competition ranking.
+
+## Pipeline Architecture
+
+### Final Phase Flow
+
+```mermaid
+flowchart LR
+    A["PDF / Image"] --> B["Rasterization\n(pypdfium2)"]
+    B --> C["Table Detection\n(Surya Layout)"]
+    C --> D["Table Crops"]
+    D --> E["TDATR VLM\n(TSR + OCR)"]
+    E --> F["CSV / JSON"]
+```
+
+### Stage Breakdown by Phase
+
+| Phase   | Stage                       | Model                    | Output                     |
+|---------|-----------------------------|--------------------------|----------------------------|
+| Phase 1 | Table Detection             | Table Transformer (TATR) | Bounding boxes             |
+| Phase 1 | Structure Recognition       | Table Transformer / TATR | Row/column structure       |
+| Phase 2 | Table Detection             | Table Transformer (TATR) | Bounding boxes             |
+| Phase 2 | Structure Recognition       | Table Transformer / TATR | Row/column structure       |
+| Phase 2 | OCR                         | PP-OCR                   | Cell text                  |
+| Final   | Table Detection             | Surya Layout Detector    | High-recall bounding boxes |
+| Final   | Structure Recognition + OCR | TDATR VLM (CVPR 2026)    | Structured cells with text |
+
+### TDATR
+
+[TDATR](https://arxiv.org/abs/2603.22819v1) is a CVPR 2026 end-to-end table recognition model built on a
+"Perceive-then-Fuse" strategy. It unifies structure understanding and content recognition under a language modeling
+paradigm, eliminating the need for a separate OCR stage. Key capabilities:
+
+- **Table Detail-Aware Learning** — pretraining tasks spanning structure and content recognition
+- **Structure-Guided Cell Localization** — refines cell boxes via structure priors and multi-level visual features
+- **Zero-shot generalization** — evaluated on seven benchmarks without dataset-specific fine-tuning
+
+The model is loaded as an in-process singleton on GPU and kept warm across requests, eliminating the ~30s
+re-initialization cost of subprocess-based approaches.
+
+## Phase Results
+
+| Phase   | Metric          | Value     |
+|---------|-----------------|-----------|
+| Phase 1 | mAP@0.5         | 1.0000    |
+| Phase 1 | mAP@0.5:0.95    | 0.9818    |
+| Phase 2 | TD F1           | 0.9965    |
+| Phase 2 | TSR F1          | 0.8989    |
+| Phase 2 | Score           | 0.9185    |
+| Final   | Table F1        | 0.890     |
+| Final   | Cell F1         | 0.837     |
+| Final   | GriTS           | 0.809     |
+| Final   | TEDS            | 0.760     |
+| Final   | **Final Score** | **0.792** |
+
+> **GriTS** (Grid Table Similarity) measures structural correctness at the grid level.
+> **TEDS** (Tree-Edit Distance based Similarity) measures similarity to the ground-truth HTML table structure.
+> **mAP@0.5** and **mAP@0.5:0.95** are standard COCO detection metrics evaluated on table bounding boxes.
+
+## Deployed Application
+
+**Live:** [table-extraction-front.onrender.com](https://table-extraction-front.onrender.com/)
+
+<!-- TODO: Add a screenshot of the UI here, e.g.: ![App screenshot](docs/screenshot.png) -->
+
+The production app is a full-stack deployment: a React frontend on Render, backed by a FastAPI service running on
+Modal with GPU inference. It exposes all pipeline capabilities through a polished UI.
+
+### Features
+
+| Feature                 | Details                                                                                              |
+|-------------------------|------------------------------------------------------------------------------------------------------|
+| **Fast mode**           | Table Transformer / TATR pipeline (Phase 1 model) — lower latency, no GPU required                   |
+| **Accurate mode**       | Surya + TDATR VLM pipeline (Final model) — full structure + OCR, GPU-backed                          |
+| **Parallel processing** | Multiple files can be queued and processed concurrently                                              |
+| **CSV export**          | Download any extracted table as a `.csv` file                                                        |
+| **Excel export**        | Download results as a formatted `.xlsx` workbook                                                     |
+| **Smithy AI assistant** | Gemini-powered chatbot embedded in the UI — ask questions about extracted tables in natural language |
+
+### Infrastructure
+
+The backend runs on Modal with two autoscaling classes:
+
+| Class            | Hardware      | Role                                                                 |
+|------------------|---------------|----------------------------------------------------------------------|
+| `TableExtractor` | NVIDIA T4 GPU | Loads TDATR + Surya once; processes jobs one at a time per container |
+| `WebApp`         | CPU           | Serves HTTP, handles uploads, dispatches jobs to `TableExtractor`    |
+
+`WebApp` keeps one container always warm for instant upload responses. `TableExtractor` scales to zero when idle
+and maintains a warm buffer of spare containers during active periods. Both classes use Modal's CPU memory snapshot
+to eliminate library import overhead on cold starts — CUDA state and model weights are loaded post-snapshot so they
+are re-initialized correctly on every restore.
 
 ## Getting Started
 
+> To try the app without a local setup, use the [live deployment](https://table-extraction-front.onrender.com/).
+> The steps below are for self-hosting the service.
+
 ### Prerequisites
+
 - Docker and Docker Compose
-- NVIDIA Container Toolkit (for GPU support)
-- TDATR model checkpoint (`model.pt`)
-- Surya layout model directory
+- NVIDIA Container Toolkit (GPU passthrough)
+- TDATR model checkpoint (`model.pt`) — download from [HuggingFace CCWM/TDATR](https://huggingface.co/CCWM/TDATR)
+- Surya layout model directory and recognition model directory
 
 ### 1. Configure Environment
-Copy the example environment file and fill in the absolute host paths for your models:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set the following variables:
-- `HOST_TDATR_CHECKPOINT`: Absolute path to your TDATR `model.pt`.
-- `HOST_SURYA_MODEL_DIR`: Absolute path to your Surya layout model directory.
-- Optional concurrency knobs:
-  - `JOB_WORKER_COUNT`: Number of parallel background workers (default `2`).
-  - `GPU_CONCURRENCY`: Number of jobs allowed in GPU inference at once (default `1`).
-  - `JOB_QUEUE_SIZE`: Max queued jobs (`0` = unbounded).
+Edit `.env` and set the required model paths:
+
+```env
+# Absolute host paths to model weights (mounted read-only into the container)
+HOST_TDATR_CHECKPOINT=/absolute/path/to/model.pt
+HOST_SURYA_LAYOUT_MODEL_DIR=/absolute/path/to/surya_layout
+HOST_SURYA_RECOGNITION_MODEL_DIR=/absolute/path/to/surya_recognition
+
+# Optional: Smithy chatbot (Gemini)
+GEMINI_API_KEY=
+```
+
+Optional performance knobs (defaults shown):
+
+```env
+TABLE_DETECTION_THRESHOLD=0.0
+TABLE_DETECTION_PADDING=5.0
+TDATR_MAX_LEN=4096
+TDATR_TEMPERATURE=0.5
+JOB_WORKER_COUNT=2
+GPU_CONCURRENCY=1
+JOB_QUEUE_SIZE=0        # 0 = unbounded
+MAX_FILE_SIZE_MB=100
+```
 
 ### 2. Run with Docker
-The TDATR code is baked into the image, while large model weights are mounted via volumes for efficiency.
 
 ```bash
-# Build and start the service
 docker-compose up --build
 ```
 
-The API will be available at `http://localhost:8000`. You can access the interactive API documentation at `http://localhost:8000/docs`.
+The API starts at `http://localhost:8000`. Interactive docs are at `http://localhost:8000/docs`.
 
----
+The container is based on `nvidia/cuda:12.8.1-base-ubuntu22.04` with Python 3.12. Model weights are mounted
+read-only from the host; the `./storage` directory is bind-mounted for persisted job data and results.
 
-## Docker Configuration Details
+## Limitations
 
-### Volume Mounts
-The `docker-compose.yml` uses the following mounts to link host resources to the container:
-- `./storage`: Persists uploaded files, job data, and extracted results.
-- `${HOST_TDATR_CHECKPOINT}`: Mounts the specific TDATR weights file to `/models/model.pt`.
-- `${HOST_SURYA_MODEL_DIR}`: Mounts the layout model directory to `/models/surya_layout`.
+| Limitation                 | Detail                                                                                                                                  |
+|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| Max file size              | 100 MB per upload                                                                                                                       |
+| GPU cold start             | `TableExtractor` scales to zero when idle — the first request after inactivity incurs a ~30–60s model load delay on the live deployment |
+| One GPU job per container  | Concurrent uploads are queued; throughput scales by adding more GPU containers, not by parallelizing within one                         |
+| Accurate mode requires GPU | Self-hosting accurate mode requires an NVIDIA GPU with CUDA 12.8 and the nvidia-container-toolkit                                       |
 
-### GPU Support
-The service is configured to use one NVIDIA GPU. Ensure your host has the `nvidia-container-toolkit` installed to enable passthrough.
+## Team
 
----
+**Tablesmith** — STP 7.0 Machathon, Table Extraction Track
 
-## API Usage Quick Start
-
-1.  **Create a Job**: `POST /api/v1/upload` with a PDF or image file.
-2.  **Poll Status**: `GET /api/v1/jobs/{job_id}` until `status` is `done`.
-3.  **Fetch Results**: `GET /api/v1/jobs/{job_id}/tables` to see the extracted data.
-
----
-
-## Deploy on Modal (GPU)
-
-This repo includes a Modal entrypoint at `modal_app.py` that reuses the current `Dockerfile` and runs the same FastAPI backend on a GPU container.
-
-### 1. Install and authenticate Modal CLI
-
-```bash
-pip install modal
-modal setup
-```
-
-### 2. Create persistent volumes
-
-```bash
-modal volume create table-extraction-models
-modal volume create table-extraction-storage
-```
-
-### 3. Upload model weights to Modal volume
-
-```bash
-# Upload TDATR checkpoint
-modal volume put table-extraction-models /absolute/path/to/model.pt /model.pt
-
-# Upload Surya layout model directory
-modal volume put table-extraction-models /absolute/path/to/surya_layout /surya_layout
-```
-
-### 4. Deploy the app
-
-```bash
-# Optional overrides
-export MODAL_APP_NAME=table-extraction-api
-export MODAL_GPU=A10G
-export MODAL_MODELS_VOLUME=table-extraction-models
-export MODAL_STORAGE_VOLUME=table-extraction-storage
-export MODAL_MIN_CONTAINERS=0
-export MODAL_MAX_CONTAINERS=1
-export MODAL_SCALEDOWN_WINDOW=300
-export MODAL_MAX_INPUTS=32
-export MODAL_TARGET_INPUTS=16
-
-modal deploy modal_app.py
-```
-
-After deploy, Modal prints the public endpoint URL. Your API routes remain the same (for example, `/health`, `/api/v1/upload`, `/api/v1/jobs/{job_id}`).
-
-The deployment uses `@modal.concurrent` so each container can handle multiple web requests at once. Keep `MODAL_MAX_CONTAINERS=1` if you want one shared in-container queue/GPU worker pool, and tune request concurrency with `MODAL_MAX_INPUTS` / `MODAL_TARGET_INPUTS`.
+- Yousif Abdulhafiz — [@ysif9](https://github.com/ysif9)
+- Mohammed Metwally — [@MohammedAhmed124](https://github.com/MohammedAhmed124)
+- Ahmed Lotfy — [@alofty25](https://github.com/alofty25)
+- Philopater Guirgis — [@Philodoescode](https://github.com/Philodoescode)
+- Soliman Elhassanein - [@SolimanElhassanein](https://github.com/Soliman-Elhassanein)

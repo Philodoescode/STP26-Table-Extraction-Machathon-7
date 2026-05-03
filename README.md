@@ -10,13 +10,18 @@
   <a href="https://table-extraction-front.onrender.com/"><strong>Try the live app →</strong></a>
 </p>
 
-![2nd Place Overall](https://img.shields.io/badge/STP%207.0%20Machathon-2nd%20Place%20Overall-silver?style=flat-square)
-![1st Raw Score](https://img.shields.io/badge/Model%20Score-1st%20Place-brightgreen?style=flat-square)
-![Phase 1 Winner](https://img.shields.io/badge/Phase%201-1st%20Place-gold?style=flat-square)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3120/)
 [![Docker](https://img.shields.io/badge/docker-CUDA%2012.8-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Modal](https://img.shields.io/badge/Modal-GPU%20Deployed-7C3AED?style=flat-square)](https://modal.com/)
 [![Demo](https://img.shields.io/badge/Demo-%E2%86%92-0ea5e9?style=flat-square)](https://table-extraction-front.onrender.com/)
+
+> 🏆 **STP 7.0 Machathon**
+>
+> 📊 **Table Extraction**
+>
+> 🥇 **1st place raw model score**
+>
+> 🥈 **2nd place overall**
 
 ## TL;DR
 

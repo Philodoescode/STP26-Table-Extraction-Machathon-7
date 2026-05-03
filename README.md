@@ -10,10 +10,12 @@
   <a href="https://table-extraction-front.onrender.com/"><strong>Try the live app →</strong></a>
 </p>
 
-[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3120/)
-[![Docker](https://img.shields.io/badge/docker-CUDA%2012.8-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Modal](https://img.shields.io/badge/Modal-GPU%20Deployed-7C3AED?style=flat-square)](https://modal.com/)
-[![Demo](https://img.shields.io/badge/Demo-%E2%86%92-0ea5e9?style=flat-square)](https://table-extraction-front.onrender.com/)
+<p align="center">
+  <a href="https://www.python.org/downloads/release/python-3120/"><img src="https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-CUDA%2012.8-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="https://modal.com/"><img src="https://img.shields.io/badge/Modal-GPU%20Deployed-7C3AED?style=flat-square" alt="Modal"></a>
+  <a href="https://table-extraction-front.onrender.com/"><img src="https://img.shields.io/badge/Demo-%E2%86%92-0ea5e9?style=flat-square" alt="Demo"></a>
+</p>
 
 > 🏆 **STP 7.0 Machathon**
 >
